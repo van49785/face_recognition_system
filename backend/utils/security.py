@@ -1,0 +1,1 @@
+# Hàm JWT, mã hóa mật khẩu, xác thực token

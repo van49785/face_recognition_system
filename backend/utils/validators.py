@@ -1,0 +1,1 @@
+# Check dữ liệu đầu vào, validate file/image/email
