@@ -4,6 +4,7 @@ from flask_migrate import Migrate
 from flask_cors import CORS
 from .config import Config
 from dotenv import load_dotenv
+from .models import *  # Import all models to ensure Flask-Migrate recognizes them
 import os
 
 load_dotenv()
