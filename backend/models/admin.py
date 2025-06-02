@@ -1,5 +1,5 @@
 from .. import db
-from datetime import datetime
+from datetime import datetime, timezone
 
 class Admin(db.Model):
     __tablename__ = 'admins'
@@ -11,7 +11,7 @@ class Admin(db.Model):
     last_login = db.Column(db.DateTime)
     failed_attempts = db.Column(db.Integer, default=0)
     locked_until = db.Column(db.DateTime)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
 
     # Quan hệ: 1 admin có thể có nhiều session, log
     sessions = db.relationship('Session', backref='admin', lazy=True)

@@ -1,6 +1,6 @@
 
 from .. import db
-from datetime import datetime
+from datetime import datetime, timezone
 
 class Employee(db.Model):
     __tablename__ = 'employees'
@@ -13,8 +13,8 @@ class Employee(db.Model):
     phone = db.Column(db.String(20))
     email = db.Column(db.String(120))
     status = db.Column(db.Boolean, default=True)  # Hoạt động hoặc không
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc))
 
     # Quan hệ: Một nhân viên có nhiều bản ghi chấm công
     attendance_records = db.relationship('Attendance', backref='employee', lazy=True)

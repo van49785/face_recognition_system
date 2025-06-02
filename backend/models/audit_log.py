@@ -1,5 +1,5 @@
 from .. import db
-from datetime import datetime
+from datetime import datetime, timezone
 
 class AuditLog(db.Model):
     __tablename__ = 'audit_logs'
@@ -7,4 +7,4 @@ class AuditLog(db.Model):
     admin_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False)
     action = db.Column(db.String(64), nullable=False)   # "login", "add_employee", v.v...
     details = db.Column(db.Text)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    timestamp = db.Column(db.DateTime, default=datetime.now(timezone.utc))
