@@ -1,1 +1,0 @@
-# Định nghĩa các route/API endpoint (Flask blueprint): API nhân viên, API chấm công, API login/logout, API báo cáo, API quản lý admin (nếu cần)
