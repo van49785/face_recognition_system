@@ -1,5 +1,5 @@
 
-from backend import db
+from app import db
 from datetime import datetime, timezone
 
 class Employee(db.Model):

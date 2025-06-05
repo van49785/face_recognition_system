@@ -4,11 +4,9 @@ from flask_migrate import Migrate
 from flask_cors import CORS
 from .config import Config
 from dotenv import load_dotenv
-from .models import *  # Import all models to ensure Flask-Migrate recognizes them
 import os
 
 load_dotenv()
-
 
 db = SQLAlchemy()
 migrate = Migrate()
@@ -20,7 +18,12 @@ def create_app(config_class=Config):
     db.init_app(app)
     migrate.init_app(app, db)
     CORS(app)
-
+    
+    # Import models after app context is available
+    from . import models  # This will trigger the import of all models
+    
+    # Register your blueprints here
+    # from .routes import your_blueprint
+    # app.register_blueprint(your_blueprint)
 
     return app
-    
