@@ -1,14 +1,73 @@
 from app import db
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
+import uuid
 
 class Attendance(db.Model):
     __tablename__ = 'attendance'
+    
     id = db.Column(db.Integer, primary_key=True)
-    attendance_id = db.Column(db.String(12), unique=True, nullable=False, index=True)  # Mã định danh
-    employee_id = db.Column(db.String(8), db.ForeignKey('employees.employee_id'), nullable=False)
-    timestamp = db.Column(db.DateTime, nullable=False, default=datetime.now(timezone.utc))
-    status = db.Column(db.String(10), nullable=False)  # "check-in" hoặc "check-out"
-    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
-    # Có thể bổ sung updated_at nếu cần
-
-    # Relationship tới Employee được định nghĩa ở Employee.attendance_records
+    attendance_id = db.Column(db.String(36), unique=True, nullable=False, index=True)
+    employee_id = db.Column(db.String(8), db.ForeignKey('employees.employee_id'), 
+                           nullable=False, index=True)
+    timestamp = db.Column(db.DateTime, nullable=False, index=True)
+    status = db.Column(db.String(10), nullable=False)  # check-in, check-out
+    location = db.Column(db.String(100))  # Thêm location nếu cần
+    device_info = db.Column(db.String(255))  # Thông tin thiết bị chấm công
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if not self.attendance_id:
+            self.attendance_id = str(uuid.uuid4())
+        if not self.timestamp:
+            self.timestamp = datetime.now(timezone.utc)
+    
+    @staticmethod
+    def validate_status(status):
+        """Validate attendance status"""
+        valid_statuses = ['check-in', 'check-out']
+        if status not in valid_statuses:
+            raise ValueError(f"Invalid status: {status}. Must be one of {valid_statuses}")
+        return True
+    
+    @staticmethod
+    def validate_location(location):
+        """Validate location (nếu có)"""
+        if location and len(location) > 100:
+            raise ValueError("Location must not exceed 100 characters")
+        return True
+    
+    @staticmethod
+    def validate_device_info(device_info):
+        """Validate device info (nếu có)"""
+        if device_info and len(device_info) > 255:
+            raise ValueError("Device info must not exceed 255 characters")
+        return True
+    
+    @classmethod
+    def create_attendance(cls, employee_id, status, location=None, device_info=None):
+        """Factory method để tạo attendance record"""
+        cls.validate_status(status)
+        cls.validate_location(location)
+        cls.validate_device_info(device_info)
+        
+        return cls(
+            employee_id=employee_id,
+            status=status,
+            location=location,
+            device_info=device_info
+        )
+    
+    @classmethod
+    def get_today_records(cls, employee_id=None):
+        """Lấy records hôm nay, xử lý múi giờ"""
+        today = datetime.now(timezone.utc).date()
+        query = cls.query.filter(
+            db.func.date(cls.timestamp) == today
+        )
+        if employee_id:
+            query = query.filter(cls.employee_id == employee_id)
+        return query.order_by(cls.timestamp.desc()).all()
+    
+    def __repr__(self):
+        return f'<Attendance {self.employee_id}: {self.status} at {self.timestamp}>'
