@@ -1,0 +1,353 @@
+/* src/components/employee/WebcamCapture.css */
+
+/* Global styles and animations */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Base button hover/active effects */
+.webcam-capture-button:hover {
+  transform: scale(1.05);
+}
+
+.webcam-capture-button:active {
+  transform: scale(0.95);
+}
+
+/* Container and Wrapper */
+.webcam-capture-container {
+  min-height: 100vh;
+  /* Updated Background: Deep Muted Purple Gradient */
+  background: linear-gradient(135deg, #2D1F38 0%, #4A305B 100%); /* Deep Muted Purple Gradient */
+  padding: 24px;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+
+.webcam-capture-wrapper {
+  max-width: 672px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* Header Section */
+.webcam-capture-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.webcam-capture-icon-wrapper {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  /* Updated Icon Wrapper Gradient: Vibrant Magenta/Fuchsia */
+  background: linear-gradient(135deg, #E03B8D, #CC2078); /* Bright Magenta to Deep Rose */
+  border-radius: 50%;
+  margin-bottom: 16px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+}
+
+.webcam-capture-user-icon {
+  width: 32px;
+  height: 32px;
+  fill: white;
+}
+
+.webcam-capture-title {
+  font-size: 36px;
+  font-weight: bold;
+  color: white; /* White text on dark background */
+  margin-bottom: 8px;
+  /* Updated Title Gradient: Vibrant Magenta/Fuchsia for Text Fill */
+  background: linear-gradient(135deg, #E03B8D, #CC2078); /* Bright Magenta to Deep Rose */
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.webcam-capture-subtitle {
+  color: #D8BEE3; /* Light Lavender/Pinkish-gray for subtle text */
+  font-size: 18px;
+}
+
+/* Main Card */
+.webcam-capture-main-card {
+  /* Updated Card Background: Slightly lighter, transparent dark tone for contrast */
+  background: rgba(45, 31, 56, 0.9); /* Darker Purple with transparency */
+  backdrop-filter: blur(20px);
+  border-radius: 24px;
+  padding: 32px;
+  box-shadow: 0 25px 50px rgba(0,0,0,0.25);
+  border: 1px solid rgba(255, 255, 255, 0.15); /* Subtle light border */
+}
+
+/* Button Styles */
+.webcam-capture-button-container {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.webcam-capture-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 24px;
+  border-radius: 16px;
+  font-weight: 600;
+  color: white;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+  font-size: 16px;
+}
+
+/* Toggle Button - Off (Muted Red) and On (Vibrant Magenta/Fuchsia) */
+.webcam-capture-toggle-button-off {
+  background: linear-gradient(135deg, #EF798A, #E06C7E); /* Muted Red */
+}
+
+.webcam-capture-toggle-button-on {
+  background: linear-gradient(135deg, #E03B8D, #CC2078); /* Vibrant Magenta/Fuchsia */
+}
+
+/* Capture Button - Vibrant Magenta/Fuchsia */
+.webcam-capture-capture-button {
+  background: linear-gradient(135deg, #E03B8D, #CC2078); /* Vibrant Magenta/Fuchsia */
+  padding: 16px 32px;
+  font-size: 18px;
+}
+
+.webcam-capture-capture-button-disabled {
+  background: #6B5B7C; /* Darker muted purple/gray when disabled */
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+/* Retake Button - Warm Amber */
+.webcam-capture-retake-button {
+  background: linear-gradient(135deg, #F4B942, #E8A800); /* Warm Amber/Yellow */
+}
+
+/* Confirm Button - Vibrant Magenta/Fuchsia */
+.webcam-capture-confirm-button {
+  background: linear-gradient(135deg, #E03B8D, #CC2078); /* Vibrant Magenta/Fuchsia */
+}
+
+/* Webcam and Photo Display */
+.webcam-capture-webcam-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.webcam-capture-webcam-wrapper {
+  position: relative;
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: 0 25px 50px rgba(0,0,0,0.25);
+  /* Updated border color: Subtle Accent color */
+  border: 4px solid rgba(224, 59, 141, 0.3); /* Subtle Magenta border */
+}
+
+.webcam-capture-webcam-wrapper video {
+  display: block;
+}
+
+.webcam-capture-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+.webcam-capture-overlay-corner {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  /* Updated Overlay Corner Color: Vibrant Magenta/Fuchsia */
+  border: 4px solid #E03B8D; /* Bright Magenta */
+}
+
+.webcam-capture-overlay-corner-tl {
+  top: 16px;
+  left: 16px;
+  border-right: none;
+  border-bottom: none;
+  border-top-left-radius: 8px;
+}
+
+.webcam-capture-overlay-corner-tr {
+  top: 16px;
+  right: 16px;
+  border-left: none;
+  border-bottom: none;
+  border-top-right-radius: 8px;
+}
+
+.webcam-capture-overlay-corner-bl {
+  bottom: 16px;
+  left: 16px;
+  border-right: none;
+  border-top: none;
+  border-bottom-left-radius: 8px;
+}
+
+.webcam-capture-overlay-corner-br {
+  bottom: 16px;
+  right: 16px;
+  border-left: none;
+  border-top: none;
+  border-bottom-right-radius: 8px;
+}
+
+.webcam-capture-photo-section {
+  text-align: center;
+}
+
+.webcam-capture-photo-title {
+  font-size: 24px;
+  font-weight: bold;
+  color: white;
+  margin-bottom: 16px;
+}
+
+.webcam-capture-photo-wrapper {
+  position: relative;
+  display: inline-block;
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: 0 25px 50px rgba(0,0,0,0.25);
+  /* Updated Photo Wrapper Border: Vibrant Magenta/Fuchsia for success */
+  border: 4px solid rgba(224, 59, 141, 0.5); /* Vibrant Magenta for success indication */
+  margin-bottom: 24px;
+}
+
+.webcam-capture-photo-wrapper img {
+  display: block;
+}
+
+.webcam-capture-success-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  /* Optional: a very subtle tint over the photo */
+  /* background: rgba(224, 59, 141, 0.2); */ /* Magenta tint */
+  pointer-events: none;
+}
+
+.webcam-capture-button-group {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+}
+
+/* Camera Off State */
+.webcam-capture-camera-off-section {
+  text-align: center;
+  padding: 48px 0;
+}
+
+.webcam-capture-camera-off-icon {
+  width: 96px;
+  height: 96px;
+  background: rgba(45, 31, 56, 0.5); /* Darker purple with transparency for icons */
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.webcam-capture-camera-off-icon svg {
+  fill: #D8BEE3; /* Lighter lavender/pinkish-gray for icons */
+}
+
+.webcam-capture-camera-off-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 8px;
+}
+
+.webcam-capture-camera-off-text {
+  color: #D8BEE3; /* Lighter lavender/pinkish-gray */
+}
+
+/* Instructions */
+.webcam-capture-instructions {
+  margin-top: 32px;
+  text-align: center;
+}
+
+.webcam-capture-instructions-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  /* Updated Instruction Badge Background */
+  background: rgba(224, 59, 141, 0.1); /* Light tint of Magenta */
+  backdrop-filter: blur(8px);
+  border-radius: 20px;
+  border: 1px solid rgba(224, 59, 141, 0.3); /* Border matching accent */
+}
+
+.webcam-capture-status-dot {
+  width: 8px;
+  height: 8px;
+  background: #E03B8D; /* Bright Magenta for status dot */
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+.webcam-capture-instructions-text {
+  color: #F0E6F5; /* Off-white with purple tint for instructions text */
+  font-size: 14px;
+}
+
+/* Responsive adjustments (kept original values) */
+@media (max-width: 600px) {
+  .webcam-capture-wrapper {
+    padding: 0 16px;
+  }
+  .webcam-capture-main-card {
+    padding: 24px;
+  }
+  .webcam-capture-title {
+    font-size: 28px;
+  }
+  .webcam-capture-subtitle {
+    font-size: 16px;
+  }
+  .webcam-capture-button {
+    padding: 10px 20px;
+    font-size: 14px;
+    gap: 8px;
+  }
+  .webcam-capture-capture-button {
+    padding: 12px 24px;
+    font-size: 16px;
+  }
+  .webcam-capture-webcam-wrapper,
+  .webcam-capture-photo-wrapper {
+    width: 100%;
+    max-width: 400px;
+    height: auto;
+  }
+  .webcam-capture-button-group {
+    flex-direction: column;
+    gap: 12px;
+  }
+}

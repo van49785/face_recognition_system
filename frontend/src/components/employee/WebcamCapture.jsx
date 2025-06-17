@@ -1,306 +1,64 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useCallback } from "react";
 import Webcam from "react-webcam";
+import './WebcamCapture.css'; // Import the new CSS file
 
-const WebcamCapture = () => {
+// Receive the 'onCapture' prop from the parent component (App.js)
+const WebcamCapture = ({ onCapture }) => { // Add 'onCapture' to props
   const webcamRef = useRef(null);
   const [imageSrc, setImageSrc] = useState(null);
   const [cameraOn, setCameraOn] = useState(true);
   const [isCapturing, setIsCapturing] = useState(false);
 
-  const capture = () => {
+  // Use useCallback for performance optimization
+  const capture = useCallback(() => {
     setIsCapturing(true);
+    // Optional: Small delay to create a capture effect
     setTimeout(() => {
       const image = webcamRef.current.getScreenshot();
       setImageSrc(image);
       setIsCapturing(false);
+      // No longer calling onCapture directly here.
+      // The image will be sent when the "Confirm Attendance" button is clicked.
     }, 200);
-  };
+  }, [webcamRef, setImageSrc, setIsCapturing]);
 
-  const toggleCamera = () => {
-    setCameraOn(!cameraOn);
-    setImageSrc(null);
-  };
+  const toggleCamera = useCallback(() => {
+    setCameraOn(prevCameraOn => !prevCameraOn);
+    setImageSrc(null); // Clear captured image when toggling camera
+  }, []);
 
-  const retakePhoto = () => {
-    setImageSrc(null);
-  };
+  const retakePhoto = useCallback(() => {
+    setImageSrc(null); // Clear captured image to allow retaking
+  }, []);
 
-  const styles = {
-    container: {
-      minHeight: '100vh',
-      background: 'linear-gradient(135deg, #1e293b 0%, #7c3aed 50%, #1e293b 100%)',
-      padding: '24px',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-    },
-    wrapper: {
-      maxWidth: '672px',
-      margin: '0 auto'
-    },
-    header: {
-      textAlign: 'center',
-      marginBottom: '32px'
-    },
-    iconWrapper: {
-      display: 'inline-flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      width: '64px',
-      height: '64px',
-      background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
-      borderRadius: '50%',
-      marginBottom: '16px',
-      boxShadow: '0 10px 25px rgba(0,0,0,0.3)'
-    },
-    userIcon: {
-      width: '32px',
-      height: '32px',
-      fill: 'white'
-    },
-    title: {
-      fontSize: '36px',
-      fontWeight: 'bold',
-      color: 'white',
-      marginBottom: '8px',
-      background: 'linear-gradient(135deg, #60a5fa, #a78bfa)',
-      backgroundClip: 'text',
-      WebkitBackgroundClip: 'text',
-      WebkitTextFillColor: 'transparent'
-    },
-    subtitle: {
-      color: '#cbd5e1',
-      fontSize: '18px'
-    },
-    mainCard: {
-      background: 'rgba(255, 255, 255, 0.1)',
-      backdropFilter: 'blur(20px)',
-      borderRadius: '24px',
-      padding: '32px',
-      boxShadow: '0 25px 50px rgba(0,0,0,0.25)',
-      border: '1px solid rgba(255, 255, 255, 0.2)'
-    },
-    buttonContainer: {
-      display: 'flex',
-      justifyContent: 'center',
-      marginBottom: '24px'
-    },
-    button: {
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: '12px',
-      padding: '12px 24px',
-      borderRadius: '16px',
-      fontWeight: '600',
-      color: 'white',
-      border: 'none',
-      cursor: 'pointer',
-      transition: 'all 0.3s ease',
-      boxShadow: '0 4px 15px rgba(0,0,0,0.2)',
-      fontSize: '16px'
-    },
-    toggleButton: {
-      background: 'linear-gradient(135deg, #ef4444, #ec4899)'
-    },
-    toggleButtonOn: {
-      background: 'linear-gradient(135deg, #10b981, #059669)'
-    },
-    captureButton: {
-      background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
-      padding: '16px 32px',
-      fontSize: '18px'
-    },
-    captureButtonDisabled: {
-      background: '#6b7280',
-      cursor: 'not-allowed'
-    },
-    retakeButton: {
-background: 'linear-gradient(135deg, #f97316, #ef4444)'
-    },
-    confirmButton: {
-      background: 'linear-gradient(135deg, #10b981, #059669)'
-    },
-    webcamContainer: {
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      gap: '24px'
-    },
-    webcamWrapper: {
-      position: 'relative',
-      borderRadius: '24px',
-      overflow: 'hidden',
-      boxShadow: '0 25px 50px rgba(0,0,0,0.25)',
-      border: '4px solid rgba(255, 255, 255, 0.2)'
-    },
-    webcam: {
-      display: 'block'
-    },
-    overlay: {
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      pointerEvents: 'none'
-    },
-    overlayCorner: {
-      position: 'absolute',
-      width: '32px',
-      height: '32px',
-      border: '4px solid #60a5fa'
-    },
-    overlayCornerTL: {
-      top: '16px',
-      left: '16px',
-      borderRight: 'none',
-      borderBottom: 'none',
-      borderTopLeftRadius: '8px'
-    },
-    overlayCornerTR: {
-      top: '16px',
-      right: '16px',
-      borderLeft: 'none',
-      borderBottom: 'none',
-      borderTopRightRadius: '8px'
-    },
-    overlayCornerBL: {
-      bottom: '16px',
-      left: '16px',
-      borderRight: 'none',
-      borderTop: 'none',
-      borderBottomLeftRadius: '8px'
-    },
-    overlayCornerBR: {
-      bottom: '16px',
-      right: '16px',
-      borderLeft: 'none',
-      borderTop: 'none',
-      borderBottomRightRadius: '8px'
-    },
-    photoSection: {
-      textAlign: 'center'
-    },
-    photoTitle: {
-      fontSize: '24px',
-      fontWeight: 'bold',
-      color: 'white',
-      marginBottom: '16px'
-    },
-    photoWrapper: {
-      position: 'relative',
-      display: 'inline-block',
-      borderRadius: '24px',
-      overflow: 'hidden',
-      boxShadow: '0 25px 50px rgba(0,0,0,0.25)',
-      border: '4px solid rgba(34, 197, 94, 0.5)',
-      marginBottom: '24px'
-    },
-    photo: {
-      display: 'block'
-    },
-    successOverlay: {
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      // background: 'rgba(34, 197, 94, 0.2)',
-      pointerEvents: 'none'
-    },
-    buttonGroup: {
-      display: 'flex',
-      gap: '16px',
-      justifyContent: 'center'
-    },
-    cameraOffSection: {
-      textAlign: 'center',
-      padding: '48px 0'
-    },
-    cameraOffIcon: {
-      width: '96px',
-      height: '96px',
-      background: 'rgba(71, 85, 105, 0.5)',
-      borderRadius: '50%',
-      display: 'inline-flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: '24px'
-    },
-    cameraOffTitle: {
-      fontSize: '20px',
-      fontWeight: '600',
-      color: 'white',
-      marginBottom: '8px'
-    },
-    cameraOffText: {
-      color: '#94a3b8'
-    },
-    instructions: {
-      marginTop: '32px',
-      textAlign: 'center'
-    },
-    instructionsBadge: {
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: '8px',
-      padding: '8px 16px',
-      background: 'rgba(255, 255, 255, 0.1)',
-backdropFilter: 'blur(8px)',
-      borderRadius: '20px',
-      border: '1px solid rgba(255, 255, 255, 0.2)'
-    },
-    statusDot: {
-      width: '8px',
-      height: '8px',
-      background: '#22c55e',
-      borderRadius: '50%',
-      animation: 'pulse 2s infinite'
-    },
-    instructionsText: {
-      color: '#cbd5e1',
-      fontSize: '14px'
-    }
-  };
+  // No more inline styles object here, as styles are now in WebcamCapture.css
 
   return (
-    <div style={styles.container}>
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.5; }
-        }
-        button:hover {
-          transform: scale(1.05);
-        }
-        button:active {
-          transform: scale(0.95);
-        }
-      `}</style>
+    <div className="webcam-capture-container">
+      {/* No need for <style> tag here anymore, as animations are in CSS file */}
       
-      <div style={styles.wrapper}>
+      <div className="webcam-capture-wrapper">
         {/* Header */}
-        <div style={styles.header}>
-          <div style={styles.iconWrapper}>
-            <svg style={styles.userIcon} viewBox="0 0 24 24">
+        <div className="webcam-capture-header">
+          <div className="webcam-capture-icon-wrapper">
+            <svg className="webcam-capture-user-icon" viewBox="0 0 24 24">
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
               <circle cx="12" cy="7" r="4"/>
             </svg>
           </div>
-          <h1 style={styles.title}>Face Attendance</h1>
-          <p style={styles.subtitle}>
+          <h1 className="webcam-capture-title">Face Attendance</h1>
+          <p className="webcam-capture-subtitle">
             Capture your photo for attendance verification
           </p>
         </div>
 
         {/* Main Card */}
-        <div style={styles.mainCard}>
+        <div className="webcam-capture-main-card">
           {/* Camera Toggle Button */}
-          <div style={styles.buttonContainer}>
+          <div className="webcam-capture-button-container">
             <button
               onClick={toggleCamera}
-              style={{
-                ...styles.button,
-                ...(cameraOn ? styles.toggleButton : styles.toggleButtonOn)
-              }}
+              className={`webcam-capture-button ${cameraOn ? 'webcam-capture-toggle-button-off' : 'webcam-capture-toggle-button-on'}`}
             >
               <span>{cameraOn ? '📷' : '📹'}</span>
               {cameraOn ? 'Turn Off Camera' : 'Turn On Camera'}
@@ -309,8 +67,8 @@ backdropFilter: 'blur(8px)',
 
           {/* Camera View */}
           {cameraOn && !imageSrc && (
-            <div style={styles.webcamContainer}>
-              <div style={styles.webcamWrapper}>
+            <div className="webcam-capture-webcam-container">
+              <div className="webcam-capture-webcam-wrapper">
                 <Webcam
                   audio={false}
                   ref={webcamRef}
@@ -320,14 +78,14 @@ backdropFilter: 'blur(8px)',
                   videoConstraints={{
                     facingMode: "user",
                   }}
-                  style={styles.webcam}
+                  // No inline style, the .webcam-capture-webcam-wrapper video rule handles it
                 />
                 {/* Overlay effect */}
-                <div style={styles.overlay}>
-                  <div style={{...styles.overlayCorner, ...styles.overlayCornerTL}}></div>
-                  <div style={{...styles.overlayCorner, ...styles.overlayCornerTR}}></div>
-                  <div style={{...styles.overlayCorner, ...styles.overlayCornerBL}}></div>
-                  <div style={{...styles.overlayCorner, ...styles.overlayCornerBR}}></div>
+                <div className="webcam-capture-overlay">
+                  <div className="webcam-capture-overlay-corner webcam-capture-overlay-corner-tl"></div>
+                  <div className="webcam-capture-overlay-corner webcam-capture-overlay-corner-tr"></div>
+                  <div className="webcam-capture-overlay-corner webcam-capture-overlay-corner-bl"></div>
+                  <div className="webcam-capture-overlay-corner webcam-capture-overlay-corner-br"></div>
                 </div>
               </div>
 
@@ -335,11 +93,7 @@ backdropFilter: 'blur(8px)',
               <button
                 onClick={capture}
                 disabled={isCapturing}
-                style={{
-                  ...styles.button,
-                  ...styles.captureButton,
-...(isCapturing ? styles.captureButtonDisabled : {})
-                }}
+                className={`webcam-capture-button webcam-capture-capture-button ${isCapturing ? 'webcam-capture-capture-button-disabled' : ''}`}
               >
                 <span>📸</span>
                 {isCapturing ? 'Capturing...' : 'Take Photo'}
@@ -349,33 +103,35 @@ backdropFilter: 'blur(8px)',
 
           {/* Photo Preview */}
           {imageSrc && (
-            <div style={styles.photoSection}>
-              <h3 style={styles.photoTitle}>
+            <div className="webcam-capture-photo-section">
+              <h3 className="webcam-capture-photo-title">
                 📸 Photo Captured Successfully!
               </h3>
-              <div style={styles.photoWrapper}>
+              <div className="webcam-capture-photo-wrapper">
                 <img 
                   src={imageSrc} 
                   alt="captured" 
                   width={400}
-                  style={styles.photo}
+                  // No inline style, .webcam-capture-photo-wrapper img handles it
                 />
                 {/* Success overlay */}
-                <div style={styles.successOverlay}></div>
+                <div className="webcam-capture-success-overlay"></div>
               </div>
 
               {/* Action Buttons */}
-              <div style={styles.buttonGroup}>
+              <div className="webcam-capture-button-group">
                 <button
                   onClick={retakePhoto}
-                  style={{...styles.button, ...styles.retakeButton}}
+                  className="webcam-capture-button webcam-capture-retake-button"
                 >
                   <span>🔄</span>
                   Retake Photo
                 </button>
                 
+                {/* This button now calls the onCapture prop to send the image to App.js */}
                 <button
-                  style={{...styles.button, ...styles.confirmButton}}
+                  onClick={() => onCapture(imageSrc)} // Call onCapture prop here
+                  className="webcam-capture-button webcam-capture-confirm-button"
                 >
                   <span>✓</span>
                   Confirm Attendance
@@ -386,17 +142,17 @@ backdropFilter: 'blur(8px)',
 
           {/* Camera Off State */}
           {!cameraOn && (
-            <div style={styles.cameraOffSection}>
-              <div style={styles.cameraOffIcon}>
+            <div className="webcam-capture-camera-off-section">
+              <div className="webcam-capture-camera-off-icon">
                 <svg width="48" height="48" fill="#94a3b8" viewBox="0 0 24 24">
                   <path d="M9.5 6.5v3M15.1 8.4l2.1-2.1M11 1h2v3h-2zM11 20h2v3h-2zM4.2 10.2L1 13l3.2 2.8M20.8 10.2L24 13l-3.2 2.8M6.3 17.7l-2.1 2.1M17.7 6.3l2.1-2.1"/>
                   <line x1="1" y1="1" x2="23" y2="23"/>
                 </svg>
               </div>
-              <h3 style={styles.cameraOffTitle}>
+              <h3 className="webcam-capture-camera-off-title">
                 Camera is turned off
               </h3>
-              <p style={styles.cameraOffText}>
+              <p className="webcam-capture-camera-off-text">
                 Click "Turn On Camera" to start capturing photos
               </p>
             </div>
@@ -404,10 +160,10 @@ backdropFilter: 'blur(8px)',
         </div>
 
         {/* Instructions */}
-        <div style={styles.instructions}>
-          <div style={styles.instructionsBadge}>
-            <div style={styles.statusDot}></div>
-            <span style={styles.instructionsText}>
+        <div className="webcam-capture-instructions">
+          <div className="webcam-capture-instructions-badge">
+            <div className="webcam-capture-status-dot"></div>
+            <span className="webcam-capture-instructions-text">
               Position your face in the frame and click capture
             </span>
           </div>
