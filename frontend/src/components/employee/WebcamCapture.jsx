@@ -60,7 +60,7 @@ const WebcamCapture = ({ onCapture }) => { // Add 'onCapture' to props
               onClick={toggleCamera}
               className={`webcam-capture-button ${cameraOn ? 'webcam-capture-toggle-button-off' : 'webcam-capture-toggle-button-on'}`}
             >
-              <span>{cameraOn ? '📷' : '📹'}</span>
+              <span>{cameraOn ? '' : ''}</span>
               {cameraOn ? 'Turn Off Camera' : 'Turn On Camera'}
             </button>
           </div>
@@ -95,7 +95,7 @@ const WebcamCapture = ({ onCapture }) => { // Add 'onCapture' to props
                 disabled={isCapturing}
                 className={`webcam-capture-button webcam-capture-capture-button ${isCapturing ? 'webcam-capture-capture-button-disabled' : ''}`}
               >
-                <span>📸</span>
+                <span></span>
                 {isCapturing ? 'Capturing...' : 'Take Photo'}
               </button>
             </div>
@@ -105,7 +105,7 @@ const WebcamCapture = ({ onCapture }) => { // Add 'onCapture' to props
           {imageSrc && (
             <div className="webcam-capture-photo-section">
               <h3 className="webcam-capture-photo-title">
-                📸 Photo Captured Successfully!
+                 Photo Captured Successfully!
               </h3>
               <div className="webcam-capture-photo-wrapper">
                 <img 

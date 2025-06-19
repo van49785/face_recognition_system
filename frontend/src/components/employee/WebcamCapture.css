@@ -18,10 +18,10 @@
 /* Container and Wrapper */
 .webcam-capture-container {
   min-height: 100vh;
-  /* Updated Background: Deep Muted Purple Gradient */
-  background: linear-gradient(135deg, #2D1F38 0%, #4A305B 100%); /* Deep Muted Purple Gradient */
+  /* Updated Background: Very Light, Soft Gray (Smoky base) */
+  background: #F0F2F5; /* A very light, cool gray */
   padding: 24px;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -46,11 +46,11 @@
   justify-content: center;
   width: 64px;
   height: 64px;
-  /* Updated Icon Wrapper Gradient: Vibrant Magenta/Fuchsia */
-  background: linear-gradient(135deg, #E03B8D, #CC2078); /* Bright Magenta to Deep Rose */
+  /* Updated Icon Wrapper Gradient: Muted Blue accent */
+  background: linear-gradient(135deg, #A8D0E6, #7EBCE6); /* Soft Blue gradient */
   border-radius: 50%;
   margin-bottom: 16px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+  box-shadow: 0 10px 25px rgba(0,0,0,0.1); /* Lighter shadow for light theme */
 }
 
 .webcam-capture-user-icon {
@@ -62,29 +62,31 @@
 .webcam-capture-title {
   font-size: 36px;
   font-weight: bold;
-  color: white; /* White text on dark background */
+  /* Changed to dark text for light background */
+  color: #333333; 
   margin-bottom: 8px;
-  /* Updated Title Gradient: Vibrant Magenta/Fuchsia for Text Fill */
-  background: linear-gradient(135deg, #E03B8D, #CC2078); /* Bright Magenta to Deep Rose */
+  /* Updated Title Gradient: Muted Blue accent for text fill */
+  background: linear-gradient(135deg, #A8D0E6, #7EBCE6); /* Soft Blue gradient */
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
 .webcam-capture-subtitle {
-  color: #D8BEE3; /* Light Lavender/Pinkish-gray for subtle text */
+  /* Updated Subtitle color: Medium gray */
+  color: #6B7280; 
   font-size: 18px;
 }
 
 /* Main Card */
 .webcam-capture-main-card {
-  /* Updated Card Background: Slightly lighter, transparent dark tone for contrast */
-  background: rgba(45, 31, 56, 0.9); /* Darker Purple with transparency */
+  /* Updated Card Background: Slightly darker soft gray */
+  background: #E8ECEF; /* Slightly darker soft gray */
   backdrop-filter: blur(20px);
   border-radius: 24px;
   padding: 32px;
-  box-shadow: 0 25px 50px rgba(0,0,0,0.25);
-  border: 1px solid rgba(255, 255, 255, 0.15); /* Subtle light border */
+  box-shadow: 0 25px 50px rgba(0,0,0,0.15); /* Lighter shadow */
+  border: 1px solid rgba(0, 0, 0, 0.08); /* Subtle dark border */
 }
 
 /* Button Styles */
@@ -101,44 +103,44 @@
   padding: 12px 24px;
   border-radius: 16px;
   font-weight: 600;
-  color: white;
+  color: white; /* Button text remains white for contrast */
   border: none;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1); /* Lighter shadow */
   font-size: 16px;
 }
 
-/* Toggle Button - Off (Muted Red) and On (Vibrant Magenta/Fuchsia) */
+/* Updated Toggle Button - Off (Muted Red) and On (Muted Blue) */
 .webcam-capture-toggle-button-off {
   background: linear-gradient(135deg, #EF798A, #E06C7E); /* Muted Red */
 }
 
 .webcam-capture-toggle-button-on {
-  background: linear-gradient(135deg, #E03B8D, #CC2078); /* Vibrant Magenta/Fuchsia */
+  background: linear-gradient(135deg, #A8D0E6, #7EBCE6); /* Muted Blue for 'on' */
 }
 
-/* Capture Button - Vibrant Magenta/Fuchsia */
+/* Updated Capture Button - Muted Blue */
 .webcam-capture-capture-button {
-  background: linear-gradient(135deg, #E03B8D, #CC2078); /* Vibrant Magenta/Fuchsia */
+  background: linear-gradient(135deg, #A8D0E6, #7EBCE6); /* Muted Blue */
   padding: 16px 32px;
   font-size: 18px;
 }
 
 .webcam-capture-capture-button-disabled {
-  background: #6B5B7C; /* Darker muted purple/gray when disabled */
+  background: #9CA3AF; /* Lighter gray when disabled */
   cursor: not-allowed;
   opacity: 0.7;
 }
 
-/* Retake Button - Warm Amber */
+/* Updated Retake Button - Muted Amber */
 .webcam-capture-retake-button {
-  background: linear-gradient(135deg, #F4B942, #E8A800); /* Warm Amber/Yellow */
+  background: linear-gradient(135deg, #F4B942, #E8A800); /* Muted Amber/Yellow */
 }
 
-/* Confirm Button - Vibrant Magenta/Fuchsia */
+/* Updated Confirm Button - Muted Blue */
 .webcam-capture-confirm-button {
-  background: linear-gradient(135deg, #E03B8D, #CC2078); /* Vibrant Magenta/Fuchsia */
+  background: linear-gradient(135deg, #A8D0E6, #7EBCE6); /* Muted Blue */
 }
 
 /* Webcam and Photo Display */
@@ -153,9 +155,9 @@
   position: relative;
   border-radius: 24px;
   overflow: hidden;
-  box-shadow: 0 25px 50px rgba(0,0,0,0.25);
-  /* Updated border color: Subtle Accent color */
-  border: 4px solid rgba(224, 59, 141, 0.3); /* Subtle Magenta border */
+  box-shadow: 0 25px 50px rgba(0,0,0,0.15); /* Lighter shadow */
+  /* Updated border color: Very subtle light gray */
+  border: 4px solid rgba(0, 0, 0, 0.05); /* Very subtle, almost invisible border */
 }
 
 .webcam-capture-webcam-wrapper video {
@@ -175,8 +177,8 @@
   position: absolute;
   width: 32px;
   height: 32px;
-  /* Updated Overlay Corner Color: Vibrant Magenta/Fuchsia */
-  border: 4px solid #E03B8D; /* Bright Magenta */
+  /* Updated Overlay Corner Color: Muted Blue */
+  border: 4px solid #A8D0E6; /* Muted Blue */
 }
 
 .webcam-capture-overlay-corner-tl {
@@ -218,7 +220,8 @@
 .webcam-capture-photo-title {
   font-size: 24px;
   font-weight: bold;
-  color: white;
+  /* Updated to dark text */
+  color: #333333; 
   margin-bottom: 16px;
 }
 
@@ -227,9 +230,9 @@
   display: inline-block;
   border-radius: 24px;
   overflow: hidden;
-  box-shadow: 0 25px 50px rgba(0,0,0,0.25);
-  /* Updated Photo Wrapper Border: Vibrant Magenta/Fuchsia for success */
-  border: 4px solid rgba(224, 59, 141, 0.5); /* Vibrant Magenta for success indication */
+  box-shadow: 0 25px 50px rgba(0,0,0,0.15); /* Lighter shadow */
+  /* Updated Photo Wrapper Border: Muted Blue for success */
+  border: 4px solid rgba(168, 208, 230, 0.5); /* Muted Blue for success indication */
   margin-bottom: 24px;
 }
 
@@ -244,7 +247,7 @@
   right: 0;
   bottom: 0;
   /* Optional: a very subtle tint over the photo */
-  /* background: rgba(224, 59, 141, 0.2); */ /* Magenta tint */
+  /* background: rgba(168, 208, 230, 0.2); */ /* Muted Blue tint */
   pointer-events: none;
 }
 
@@ -263,7 +266,7 @@
 .webcam-capture-camera-off-icon {
   width: 96px;
   height: 96px;
-  background: rgba(45, 31, 56, 0.5); /* Darker purple with transparency for icons */
+  background: rgba(176, 183, 193, 0.3); /* Lighter gray with transparency for icons */
   border-radius: 50%;
   display: inline-flex;
   align-items: center;
@@ -272,18 +275,20 @@
 }
 
 .webcam-capture-camera-off-icon svg {
-  fill: #D8BEE3; /* Lighter lavender/pinkish-gray for icons */
+  fill: #6B7280; /* Medium gray for icons */
 }
 
 .webcam-capture-camera-off-title {
   font-size: 20px;
   font-weight: 600;
-  color: white;
+  /* Updated to dark text */
+  color: #333333; 
   margin-bottom: 8px;
 }
 
 .webcam-capture-camera-off-text {
-  color: #D8BEE3; /* Lighter lavender/pinkish-gray */
+  /* Updated to medium gray */
+  color: #6B7280;
 }
 
 /* Instructions */
@@ -298,26 +303,27 @@
   gap: 8px;
   padding: 8px 16px;
   /* Updated Instruction Badge Background */
-  background: rgba(224, 59, 141, 0.1); /* Light tint of Magenta */
+  background: rgba(168, 208, 230, 0.1); /* Light tint of Muted Blue */
   backdrop-filter: blur(8px);
   border-radius: 20px;
-  border: 1px solid rgba(224, 59, 141, 0.3); /* Border matching accent */
+  border: 1px solid rgba(168, 208, 230, 0.3); /* Border matching accent */
 }
 
 .webcam-capture-status-dot {
   width: 8px;
   height: 8px;
-  background: #E03B8D; /* Bright Magenta for status dot */
+  background: #A8D0E6; /* Muted Blue for status dot */
   border-radius: 50%;
   animation: pulse 2s infinite;
 }
 
 .webcam-capture-instructions-text {
-  color: #F0E6F5; /* Off-white with purple tint for instructions text */
+  /* Updated to medium gray */
+  color: #6B7280; 
   font-size: 14px;
 }
 
-/* Responsive adjustments (kept original values) */
+/* Responsive adjustments (kept original values, feel free to adapt if needed) */
 @media (max-width: 600px) {
   .webcam-capture-wrapper {
     padding: 0 16px;

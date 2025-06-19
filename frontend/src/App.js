@@ -53,20 +53,20 @@ function App() {
         }
       });
       // Nếu yêu cầu thành công, cập nhật thông báo với dữ liệu từ server
-      setServerMessage(response.data.message || "Ảnh đã được nhận thành công!");
+      setServerMessage(response.data.message || "Photo received successfully!");
       console.log("Phản hồi từ server:", response.data);
     } catch (error) {
       console.error("Lỗi khi gửi ảnh:", error);
       // Xử lý các loại lỗi khác nhau để hiển thị thông báo phù hợp
       if (error.response) {
         // Lỗi từ phía server (HTTP status code 4xx, 5xx)
-        setServerMessage(`Lỗi: ${error.response.data.error || "Không thể kết nối đến server."}`);
+        setServerMessage(`Lỗi: ${error.response.data.error || "Unable to connect to server."}`);
       } else if (error.request) {
         // Yêu cầu đã được gửi nhưng không nhận được phản hồi (lỗi mạng, server chưa chạy, CORS)
-        setServerMessage("Lỗi mạng: Không nhận được phản hồi từ server. Vui lòng kiểm tra kết nối hoặc địa chỉ server.");
+        setServerMessage("Network Error: No response received from server. Please check connection or server address.");
       } else {
         // Lỗi khác xảy ra trong quá trình thiết lập yêu cầu
-        setServerMessage("Lỗi không xác định khi gửi ảnh.");
+        setServerMessage("Unknown error while sending photo.");
       }
     } finally {
       setIsLoading(false); // Luôn tắt trạng thái loading sau khi yêu cầu hoàn tất (dù thành công hay thất bại)
@@ -80,7 +80,7 @@ function App() {
       <WebcamCapture onCapture={handleImageCapture} />
 
       {/* Hiển thị trạng thái loading khi ảnh đang được gửi */}
-      {isLoading && <p className="loading-message">Đang gửi ảnh...</p>}
+      {/* {isLoading && <p className="loading-message">Sending</p>} */}
 
       {/* Hiển thị thông báo từ server (thành công hoặc lỗi) */}
       {serverMessage && (
