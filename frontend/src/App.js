@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
-// Đảm bảo đường dẫn này đúng với vị trí file WebcamCapture.js của bạn
-// Ví dụ: './components/employee/WebcamCapture' nếu nó nằm trong src/components/employee
 import WebcamCapture from './components/employee/WebcamCapture'; 
-import axios from 'axios'; // Import axios để gửi HTTP requests
+import axios from 'axios'; 
 
 function App() {
   // State để lưu ảnh đã chụp dưới dạng chuỗi Base64
@@ -19,59 +17,50 @@ function App() {
    * @param {string} imageSrc Chuỗi Base64 của ảnh đã chụp từ WebcamCapture.
    */
   const handleImageCapture = async (imageSrc) => {
-    setCapturedImage(imageSrc); // Lưu ảnh đã chụp để hiển thị lại nếu cần
-    setServerMessage(''); // Reset thông báo cũ khi bắt đầu một lần gửi mới
-    setIsLoading(true); // Bật trạng thái loading
+  setCapturedImage(imageSrc);
+  setServerMessage('');
+  setIsLoading(true);
 
-    // --- Bắt đầu chuyển đổi ảnh từ Base64 sang Blob ---
-    // `imageSrc` có định dạng "data:image/jpeg;base64,..."
-    // Chúng ta cần lấy phần dữ liệu Base64 sau dấu phẩy.
-    const base64Data = imageSrc.split(',')[1];
-    const byteCharacters = atob(base64Data); // Giải mã chuỗi Base64 thành chuỗi nhị phân
-    const byteNumbers = new Array(byteCharacters.length);
-    for (let i = 0; i < byteCharacters.length; i++) {
-      byteNumbers[i] = byteCharacters.charCodeAt(i);
-    }
-    const byteArray = new Uint8Array(byteNumbers);
-    // Tạo đối tượng Blob với kiểu MIME là JPEG
-    const blob = new Blob([byteArray], { type: 'image/jpeg' }); 
-    // --- Kết thúc chuyển đổi ---
+  const base64Data = imageSrc.split(',')[1];
+  const byteCharacters = atob(base64Data);
+  const byteNumbers = new Array(byteCharacters.length);
+  for (let i = 0; i < byteCharacters.length; i++) {
+    byteNumbers[i] = byteCharacters.charCodeAt(i);
+  }
+  const byteArray = new Uint8Array(byteNumbers);
+  const blob = new Blob([byteArray], { type: 'image/jpeg' });
 
-    // Tạo FormData để đóng gói file ảnh và gửi lên server
-    const formData = new FormData();
-    // 'photo' là tên trường (field name) mà backend API của bạn sẽ mong đợi nhận.
-    // Đảm bảo tên này khớp với tên mà backend (Thiệp, Vân, Long) đã định nghĩa.
-    formData.append('photo', blob, 'webcam_capture.jpg'); 
+  const formData = new FormData();
+  formData.append('image', blob, 'webcam_capture.jpg');
 
-    try {
-      // Gửi yêu cầu POST lên server backend sử dụng axios.
-      // !!! CẬP NHẬT URL NÀY CHO KHỚP VỚI ĐỊA CHỈ API CỦA BACKEND CỦA BẠN !!!
-      // Ví dụ: 'http://localhost:5000/api/capture'
-      const response = await axios.post('http://localhost:5000/api/capture', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data' // Rất quan trọng để server hiểu đây là dữ liệu form có chứa file
-        }
-      });
-      // Nếu yêu cầu thành công, cập nhật thông báo với dữ liệu từ server
-      setServerMessage(response.data.message || "Photo received successfully!");
-      console.log("Phản hồi từ server:", response.data);
-    } catch (error) {
-      console.error("Lỗi khi gửi ảnh:", error);
-      // Xử lý các loại lỗi khác nhau để hiển thị thông báo phù hợp
-      if (error.response) {
-        // Lỗi từ phía server (HTTP status code 4xx, 5xx)
-        setServerMessage(`Lỗi: ${error.response.data.error || "Unable to connect to server."}`);
-      } else if (error.request) {
-        // Yêu cầu đã được gửi nhưng không nhận được phản hồi (lỗi mạng, server chưa chạy, CORS)
-        setServerMessage("Network Error: No response received from server. Please check connection or server address.");
-      } else {
-        // Lỗi khác xảy ra trong quá trình thiết lập yêu cầu
-        setServerMessage("Unknown error while sending photo.");
+  try {
+    const response = await axios.post('http://localhost:5000/api/capture', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
       }
-    } finally {
-      setIsLoading(false); // Luôn tắt trạng thái loading sau khi yêu cầu hoàn tất (dù thành công hay thất bại)
+    });
+
+    if (response.data.image) {
+      // Nếu nhận được ảnh đã xử lý từ server, hiển thị ảnh
+      const processedImage = `data:image/jpeg;base64,${response.data.image}`;
+      setCapturedImage(processedImage);
     }
-  };
+
+    setServerMessage(response.data.message || 'Photo received successfully!');
+    console.log('Phản hồi từ server:', response.data);
+  } catch (error) {
+    console.error('Lỗi khi gửi ảnh:', error);
+    if (error.response) {
+      setServerMessage(`Lỗi: ${error.response.data.error || 'Unable to connect to server.'}`);
+    } else if (error.request) {
+      setServerMessage('Network Error: No response received from server. Please check connection or server address.');
+    } else {
+      setServerMessage('Unknown error while sending photo.');
+    }
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   return (
     <div className="App">
