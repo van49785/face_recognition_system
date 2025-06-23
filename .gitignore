@@ -14,6 +14,7 @@ __pycache__/
 instance/
 migrations/versions/   # Chỉ cần nếu không muốn push migration history, thường giữ lại folder migrations (trừ /versions)
 *.log
+migrations/
 
 # Env/config
 .env
