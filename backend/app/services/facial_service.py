@@ -89,28 +89,24 @@ class FacialRecognitionService:
     
 
     @staticmethod
-    def recognize_face_with_liveness(image_file):
+    def recognize_face_with_liveness(processed_image: np.ndarray):
         '''
         Nhận diện khuôn mặt với kiểm tra chống giả mạo
+        Đầu vào: ảnh numpy.ndarray đã được xử lý sẵn
         Trả về: (bool, str, employee hoặc None)
         '''
 
-        # Tiền xử lý ảnh
-        success, message, processed_image = FacialRecognitionService.preprocess_image(image_file)
-        if not success:
-            return False, message, None
-
-        # Kiểm tra chống giả mạo
+        # Kiểm tra chống giả mạo (phân biệt ảnh thật/giả)
         liveness_success, liveness_message = FacialRecognitionService.detect_liveness(processed_image)
         if not liveness_success:
             return False, liveness_message, None
 
-        # Tạo encoding khuôn mặt
+        # Tạo face encoding từ ảnh
         face_encodings = face_recognition.face_encodings(processed_image)
         if not face_encodings:
             return False, "Failed to generate face encoding", None
 
-        # Truy vấn danh sách nhân viên đã đăng ký khuôn mặt
+        # Lấy danh sách nhân viên đã đăng ký khuôn mặt
         employees = Employee.query.all()
         if not employees:
             return False, "No employees have registered their face yet", None
@@ -119,20 +115,18 @@ class FacialRecognitionService:
         best_match_employee = None
         face_encoding = face_encodings[0]
 
-        # So sánh encoding với từng nhân viên
+        # So sánh encoding với từng nhân viên đã lưu
         for employee in employees:
             if employee.face_encoding:
-                # Giải mã face encoding lưu trữ dưới dạng bytes
                 stored_encoding = np.frombuffer(employee.face_encoding, dtype=np.float64)
                 distances = face_recognition.face_distance([stored_encoding], face_encoding)
 
-                # Tìm nhân viên có khoảng cách nhỏ nhất
                 if distances[0] < best_match_distance:
                     best_match_distance = distances[0]
                     best_match_employee = employee
 
-        # Nếu khoảng cách nhỏ hơn 0.4 → coi là khớp (>95% chính xác)
         if best_match_distance < 0.4:
             return True, "Face recognized successfully", best_match_employee
-        
+
         return False, "Face does not match any registered employee", None
+

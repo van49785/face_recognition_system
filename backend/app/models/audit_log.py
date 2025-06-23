@@ -1,4 +1,4 @@
-from app import db
+from app.db import db
 from datetime import datetime, timezone, timedelta
 
 class AuditLog(db.Model):
