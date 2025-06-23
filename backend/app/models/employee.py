@@ -1,4 +1,4 @@
-from app import db
+from app.db import db
 from datetime import datetime, timezone, date
 import re
 from app.models.attendance import Attendance

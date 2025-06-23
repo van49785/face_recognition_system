@@ -34,7 +34,7 @@ function App() {
   formData.append('image', blob, 'webcam_capture.jpg');
 
   try {
-    const response = await axios.post('http://localhost:5000/api/capture', formData, {
+    const response = await axios.post('http://localhost:5000/api/recognize', formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       }
