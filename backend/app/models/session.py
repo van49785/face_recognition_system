@@ -2,6 +2,7 @@ from app.db import db
 from datetime import datetime, timezone, timedelta
 import secrets
 import hashlib
+import re
 
 class Session(db.Model):
     __tablename__ = 'sessions'
@@ -14,30 +15,19 @@ class Session(db.Model):
     expires_at = db.Column(db.DateTime, nullable=False)
     is_valid = db.Column(db.Boolean, default=True, nullable=False)
     last_activity = db.Column(db.DateTime, nullable=False)
-    ip_address = db.Column(db.String(15))  # IPv4, tối đa 15 ký tự
-    user_agent = db.Column(db.String(500))
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        now = datetime.now(timezone.utc)
         if not self.session_id:
             self.session_id = secrets.token_urlsafe(32)
         if not self.issued_at:
-            self.issued_at = datetime.now(timezone.utc)
+            self.issued_at = now
         if not self.expires_at:
             self.expires_at = self.issued_at + timedelta(hours=2)
         if not self.last_activity:
             self.last_activity = self.issued_at
-    
-    @staticmethod
-    def validate_ip_address(ip_address):
-        """Validate IPv4 address"""
-        if not ip_address:
-            return True
-        pattern = r'^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$'
-        import re
-        if not re.match(pattern, ip_address):
-            raise ValueError("Invalid IPv4 address format")
-        return True
+
     
     @staticmethod
     def hash_token(token):
@@ -45,15 +35,29 @@ class Session(db.Model):
         return hashlib.sha256(token.encode()).hexdigest()
     
     @classmethod
-    def create_session(cls, admin_id, jwt_token, ip_address=None, user_agent=None):
-        """Factory method để tạo session"""
-        cls.validate_ip_address(ip_address)
-        return cls(
+    def create_session(
+        cls,
+        admin_id: int,
+        jwt_token: str,
+    ) -> "Session":
+        
+        session = cls(
             admin_id=admin_id,
             jwt_token_hash=cls.hash_token(jwt_token),
-            ip_address=ip_address,
-            user_agent=user_agent
         )
+        db.session.add(session)
+        db.session.commit()
+        return session
+    
+    @classmethod
+    def invalidate_token_hash(cls, jwt_token: str) -> None:
+        """Vô hiệu hoá (đặt is_valid=False) tất cả phiên trùng token."""
+        hashed = cls.hash_token(jwt_token)
+        sess = cls.query.filter_by(jwt_token_hash=hashed, is_valid=True).first()
+        if sess:
+            sess.is_valid = False
+            db.session.commit()
+
     
     def is_expired(self):
         """Kiểm tra session có hết hạn không"""

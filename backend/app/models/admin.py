@@ -1,6 +1,6 @@
 from app.db import db
 from datetime import datetime, timezone, timedelta
-from werkzeug.security import generate_password_hash, check_password_hash
+from app.utils.security import hash_password, check_password_hash
 
 class Admin(db.Model):
     __tablename__ = 'admins'
@@ -24,7 +24,7 @@ class Admin(db.Model):
     
     def set_password(self, password):
         """Hash và lưu password"""
-        self.password_hash = generate_password_hash(password)
+        self.password_hash = hash_password(password)
     
     def check_password(self, password):
         """Kiểm tra password và cập nhật failed_attempts"""
