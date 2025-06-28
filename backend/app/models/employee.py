@@ -22,15 +22,6 @@ class Employee(db.Model):
     # Relationships
     attendance_records = db.relationship('Attendance', backref='employee', lazy=True)
     
-    @staticmethod
-    def validate_employee_id(employee_id):
-        """Validate định dạng employee_id (8 ký tự alphanumeric)"""
-        if not employee_id or len(employee_id) != 8:
-            raise ValueError("Employee ID must be exactly 8 characters")
-        if not re.match(r'^[A-Z0-9]{8}$', employee_id.upper()):
-            raise ValueError("Employee ID must be alphanumeric")
-        return True
-    
     @staticmethod  
     def validate_email(email):
         """Validate email format và độ dài"""
@@ -69,3 +60,4 @@ class Employee(db.Model):
     
     def __repr__(self):
         return f'<Employee {self.employee_id}: {self.full_name}>'
+    

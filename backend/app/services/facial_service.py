@@ -107,7 +107,7 @@ class FacialRecognitionService:
             return False, "Failed to generate face encoding", None
 
         # Lấy danh sách nhân viên đã đăng ký khuôn mặt
-        employees = Employee.query.all()
+        employees = Employee.query.filter_by(status=True).all()
         if not employees:
             return False, "No employees have registered their face yet", None
 
