@@ -10,8 +10,6 @@ class AuditLog(db.Model):
     target_type = db.Column(db.String(32))  # 'employee', 'admin', 'system'
     target_id = db.Column(db.String(32))
     details = db.Column(db.Text)  # Giới hạn độ dài trong validation
-    ip_address = db.Column(db.String(15))  # IPv4, tối đa 15 ký tự
-    user_agent = db.Column(db.String(500))
     timestamp = db.Column(db.DateTime, nullable=False, index=True)
     status = db.Column(db.String(20), default='success')  # 'success', 'failed', 'warning'
     
@@ -37,7 +35,7 @@ class AuditLog(db.Model):
     
     @classmethod
     def log_action(cls, admin_id, action, details=None, target_type=None, target_id=None, 
-                   ip_address=None, user_agent=None, status='success'):
+                    status='success'):
         """Helper method để tạo audit log"""
         cls.validate_status(status)
         cls.validate_details(details)
@@ -48,8 +46,6 @@ class AuditLog(db.Model):
             details=details,
             target_type=target_type,
             target_id=target_id,
-            ip_address=ip_address,
-            user_agent=user_agent,
             status=status
         )
         db.session.add(log)
@@ -57,20 +53,18 @@ class AuditLog(db.Model):
         return log
     
     @classmethod
-    def log_login(cls, admin_id, ip_address=None, user_agent=None, success=True):
+    def log_login(cls, admin_id, success=True):
         """Log login attempt"""
         return cls.log_action(
             admin_id=admin_id,
             action='login',
             details='User login attempt',
-            ip_address=ip_address,
-            user_agent=user_agent,
             status='success' if success else 'failed'
         )
     
     @classmethod
-    def log_employee_action(cls, admin_id, action, employee_id, details=None, 
-                           ip_address=None, user_agent=None):
+    def log_employee_action(cls, admin_id, action, employee_id, details=None
+                            ):
         """Log employee-related actions"""
         return cls.log_action(
             admin_id=admin_id,
@@ -78,8 +72,6 @@ class AuditLog(db.Model):
             target_type='employee',
             target_id=employee_id,
             details=details,
-            ip_address=ip_address,
-            user_agent=user_agent
         )
     
     @classmethod
