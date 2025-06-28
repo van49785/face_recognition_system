@@ -1,6 +1,7 @@
 from app.db import db
 from datetime import datetime, timezone, date
 import uuid
+import pytz
 
 class Attendance(db.Model):
     __tablename__ = 'attendance'
@@ -11,16 +12,20 @@ class Attendance(db.Model):
                            nullable=False, index=True)
     timestamp = db.Column(db.DateTime, nullable=False, index=True)
     status = db.Column(db.String(10), nullable=False)  # check-in, check-out
-    location = db.Column(db.String(100))  # Thêm location nếu cần
-    device_info = db.Column(db.String(255))  # Thông tin thiết bị chấm công
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    location = db.Column(db.String(100))
+    device_info = db.Column(db.String(255))
+    # Đồng bộ timezone với Employee model - sử dụng Asia/Ho_Chi_Minh
+    created_at = db.Column(db.DateTime, 
+                          default=lambda: datetime.now(pytz.timezone("Asia/Ho_Chi_Minh")).replace(tzinfo=None), 
+                          nullable=False)
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         if not self.attendance_id:
             self.attendance_id = str(uuid.uuid4())
         if not self.timestamp:
-            self.timestamp = datetime.now(timezone.utc)
+            # Sử dụng timezone Việt Nam thay vì UTC
+            self.timestamp = datetime.now(pytz.timezone("Asia/Ho_Chi_Minh")).replace(tzinfo=None)
     
     @staticmethod
     def validate_status(status):
@@ -60,8 +65,8 @@ class Attendance(db.Model):
     
     @classmethod
     def get_today_records(cls, employee_id=None):
-        """Lấy records hôm nay, xử lý múi giờ"""
-        today = datetime.now(timezone.utc).date()
+        """Lấy records hôm nay - đồng bộ với timezone Việt Nam"""
+        today = datetime.now(pytz.timezone("Asia/Ho_Chi_Minh")).date()
         query = cls.query.filter(
             db.func.date(cls.timestamp) == today
         )

@@ -3,6 +3,7 @@ from datetime import datetime, timezone, timedelta
 import secrets
 import hashlib
 import re
+import pytz
 
 class Session(db.Model):
     __tablename__ = 'sessions'
@@ -18,7 +19,8 @@ class Session(db.Model):
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        now = datetime.now(timezone.utc)
+        # Đồng bộ timezone với Employee và Attendance - sử dụng Asia/Ho_Chi_Minh
+        now = datetime.now(pytz.timezone("Asia/Ho_Chi_Minh")).replace(tzinfo=None)
         if not self.session_id:
             self.session_id = secrets.token_urlsafe(32)
         if not self.issued_at:
@@ -60,8 +62,9 @@ class Session(db.Model):
 
     
     def is_expired(self):
-        """Kiểm tra session có hết hạn không"""
-        return datetime.now(timezone.utc) > self.expires_at
+        """Kiểm tra session có hết hạn không - đồng bộ timezone"""
+        now = datetime.now(pytz.timezone("Asia/Ho_Chi_Minh")).replace(tzinfo=None)
+        return now > self.expires_at
     
     def is_active(self):
         """Kiểm tra session có hoạt động không"""
@@ -70,25 +73,25 @@ class Session(db.Model):
     def invalidate(self):
         """Vô hiệu hóa session"""
         self.is_valid = False
-        db.session.commit()  # Đảm bảo lưu thay đổi
+        db.session.commit()
     
     def update_activity(self, extend_duration=False):
         """Cập nhật thời gian hoạt động cuối, có thể gia hạn session"""
-        self.last_activity = datetime.now(timezone.utc)
+        now = datetime.now(pytz.timezone("Asia/Ho_Chi_Minh")).replace(tzinfo=None)
+        self.last_activity = now
         if extend_duration and self.is_valid:
             self.expires_at = self.last_activity + timedelta(hours=2)
-        db.session.commit()  # Đảm bảo lưu thay đổi
+        db.session.commit()
     
     @classmethod
     def cleanup_expired(cls):
         """Cleanup các session hết hạn"""
-        expired_sessions = cls.query.filter(
-            cls.expires_at < datetime.now(timezone.utc)
-        ).all()
+        now = datetime.now(pytz.timezone("Asia/Ho_Chi_Minh")).replace(tzinfo=None)
+        expired_sessions = cls.query.filter(cls.expires_at < now).all()
         count = len(expired_sessions)
         for session in expired_sessions:
             db.session.delete(session)
-        db.session.commit()  # Đảm bảo xóa khỏi database
+        db.session.commit()
         return count
     
     def __repr__(self):
