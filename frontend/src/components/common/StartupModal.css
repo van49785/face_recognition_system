@@ -1,0 +1,115 @@
+/* src/components/common/StartupModal.css */
+
+.startup-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7); 
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000; 
+  font-family: 'Inter', sans-serif;
+  animation: fadeIn 0.3s ease-out; 
+}
+
+.startup-modal-content {
+  background-color: #ffffff;
+  padding: 40px;
+  border-radius: 15px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  text-align: center;
+  max-width: 450px;
+  width: 90%;
+  animation: slideInFromTop 0.4s ease-out; 
+}
+
+.startup-modal-content h2 {
+  font-size: 2.2rem;
+  font-weight: 700;
+  color: #333333;
+  margin-bottom: 15px;
+  @extend .text-gradient-light; /* Using text gradient utility */
+}
+
+.startup-modal-content p {
+  font-size: 1.1rem;
+  color: #666666;
+  margin-bottom: 30px;
+  line-height: 1.6;
+}
+
+.startup-modal-actions {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  flex-wrap: wrap; 
+}
+
+.modal-button {
+  padding: 15px 30px;
+  border: none;
+  border-radius: 10px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 6px 15px rgba(0,0,0,0.1);
+  min-width: 150px;
+  display: inline-flex; /* For icons */
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.employee-button {
+  @extend .gradient-blue-primary;
+  color: white;
+}
+
+.admin-button {
+  background: linear-gradient(45deg, #A8D0E6, #6B9DC8); 
+  color: white;
+}
+
+.modal-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+  opacity: 0.95;
+}
+
+/* Keyframe animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInFromTop {
+  from { transform: translateY(-50px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+  .startup-modal-content {
+    padding: 30px;
+    border-radius: 10px;
+  }
+  .startup-modal-content h2 {
+    font-size: 1.8rem;
+  }
+  .startup-modal-content p {
+    font-size: 1rem;
+  }
+  .startup-modal-actions {
+    flex-direction: column;
+    gap: 15px;
+  }
+  .modal-button {
+    width: 100%; 
+    min-width: unset;
+    padding: 12px 20px;
+  }
+}
