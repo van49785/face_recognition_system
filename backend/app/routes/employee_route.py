@@ -5,6 +5,11 @@ from app.models.employee import Employee
 from app import db
 from sqlalchemy.exc import IntegrityError
 import pytz
+import os
+from io import BytesIO
+from PIL import Image
+from datetime import datetime
+from app.utils.helpers import format_datetime_vn
 
 employee_bp = Blueprint('employee', __name__)
 
@@ -41,6 +46,19 @@ def add_employee():
     if not success:
         return jsonify({"error": message}), 400
     
+    # Lưu ảnh gốc vào thư mục local
+    try:
+        save_dir = os.path.join("backend", "app", "data", "uploads")  # Fixed missing comma
+        os.makedirs(save_dir, exist_ok=True)
+
+        image_file.stream.seek(0)  # Reset pointer
+        image = Image.open(BytesIO(image_file.read()))
+        image = image.convert("RGB")  # Đảm bảo ảnh không bị lỗi kênh màu
+        save_path = os.path.join(save_dir, f"{employee_id}.jpg")
+        image.save(save_path)
+    except Exception as e:
+        return jsonify({"error": f"Failed to save photo: {str(e)}"}), 500
+    
     # Tạo nhân viên
     new_employee = Employee(
         employee_id = employee_id,
@@ -74,8 +92,6 @@ def add_employee():
 def get_all_active_employees():
     employees = Employee.query.filter_by(status=True).order_by(Employee.created_at.desc()).all()
 
-    vn_tz = pytz.timezone("Asia/Ho_Chi_Minh")
-
     result = []
     for emp in employees:
         result.append({
@@ -83,7 +99,7 @@ def get_all_active_employees():
             "full_name": emp.full_name,
             "department": emp.department,
             "position": emp.position,
-            "created_at": emp.created_at.astimezone(vn_tz).strftime("%d/%m/%Y %H:%M:%S")
+            "created_at": format_datetime_vn(emp.created_at)
         })
 
     return jsonify({
@@ -97,8 +113,6 @@ def get_employee_detail(employee_id):
     employee = Employee.query.filter_by(employee_id=employee_id.upper()).first()
     if not employee:
         return jsonify({"error": "Employee not found"}), 404
-
-    vn_tz = pytz.timezone("Asia/Ho_Chi_Minh")
     
     return jsonify({
         "employee_id": employee.employee_id,
@@ -108,8 +122,8 @@ def get_employee_detail(employee_id):
         "phone": employee.phone,
         "email": employee.email,
         "status": "active" if employee.status else "inactive",
-        "created_at": employee.created_at.astimezone(vn_tz).strftime("%d/%m/%Y %H:%M:%S"),
-        "updated_at": employee.updated_at.astimezone(vn_tz).strftime("%d/%m/%Y %H:%M:%S") if employee.updated_at else None
+        "created_at": format_datetime_vn(employee.created_at),
+        "updated_at": format_datetime_vn(employee.updated_at)
     }), 200
 
 # Update nhân viên
@@ -148,6 +162,20 @@ def update_employee(employee_id):
         if not success:
             return jsonify({"error": message}), 400
         employee.face_encoding = face_encoding
+        
+        # Lưu ảnh mới (optional - nếu muốn update ảnh trên disk)
+        try:
+            save_dir = os.path.join("backend", "app", "data", "uploads")
+            os.makedirs(save_dir, exist_ok=True)
+            
+            image_file.stream.seek(0)
+            image = Image.open(BytesIO(image_file.read()))
+            image = image.convert("RGB")
+            save_path = os.path.join(save_dir, f"{employee.employee_id}.jpg")
+            image.save(save_path)
+        except Exception as e:
+            # Log error but don't fail the request since DB is already updated
+            print(f"Warning: Failed to save updated photo: {str(e)}")
 
     db.session.commit()
 

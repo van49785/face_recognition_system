@@ -1,5 +1,6 @@
 from app.db import db
 from datetime import datetime, timezone, timedelta
+import pytz
 
 class AuditLog(db.Model):
     __tablename__ = 'audit_logs'
@@ -16,7 +17,8 @@ class AuditLog(db.Model):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         if not self.timestamp:
-            self.timestamp = datetime.now(timezone.utc)
+            # Đồng bộ timezone với Employee và Attendance - sử dụng Asia/Ho_Chi_Minh
+            self.timestamp = datetime.now(pytz.timezone("Asia/Ho_Chi_Minh")).replace(tzinfo=None)
     
     @staticmethod
     def validate_status(status):
@@ -49,7 +51,7 @@ class AuditLog(db.Model):
             status=status
         )
         db.session.add(log)
-        db.session.commit()  # Đảm bảo log được lưu ngay
+        db.session.commit()
         return log
     
     @classmethod
@@ -87,7 +89,7 @@ class AuditLog(db.Model):
     @classmethod
     def archive_old_logs(cls, days=90):
         """Lưu trữ hoặc xóa logs cũ hơn số ngày quy định"""
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        cutoff = datetime.now(pytz.timezone("Asia/Ho_Chi_Minh")).replace(tzinfo=None) - timedelta(days=days)
         old_logs = cls.query.filter(cls.timestamp < cutoff).all()
         for log in old_logs:
             db.session.delete(log)
