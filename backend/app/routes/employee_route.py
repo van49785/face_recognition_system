@@ -1,5 +1,5 @@
 # API nhân viên
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from app.services.facial_service import FacialRecognitionService
 from app.models.employee import Employee
 from app import db
@@ -9,7 +9,7 @@ import os
 from io import BytesIO
 from PIL import Image
 from datetime import datetime
-from app.utils.helpers import format_datetime_vn
+from app.utils.helpers import format_datetime_vn, get_upload_path
 
 employee_bp = Blueprint('employee', __name__)
 
@@ -48,7 +48,7 @@ def add_employee():
     
     # Lưu ảnh gốc vào thư mục local
     try:
-        save_dir = os.path.join("backend", "app", "data", "uploads")  # Fixed missing comma
+        save_dir = get_upload_path()  # Sử dụng hàm nhất quán
         os.makedirs(save_dir, exist_ok=True)
 
         image_file.stream.seek(0)  # Reset pointer
@@ -163,9 +163,9 @@ def update_employee(employee_id):
             return jsonify({"error": message}), 400
         employee.face_encoding = face_encoding
         
-        # Lưu ảnh mới (optional - nếu muốn update ảnh trên disk)
+        # Lưu ảnh mới với đường dẫn nhất quán
         try:
-            save_dir = os.path.join("backend", "app", "data", "uploads")
+            save_dir = get_upload_path()  # Sử dụng hàm nhất quán
             os.makedirs(save_dir, exist_ok=True)
             
             image_file.stream.seek(0)

@@ -1,7 +1,7 @@
 # Tiện ích khác (format ngày giờ, export file...)
 import pytz
 from datetime import datetime
-
+import os
 
 def format_datetime_vn(dt):
     """Helper function để format datetime sang timezone Việt Nam"""
@@ -25,3 +25,13 @@ def format_time_vn(dt):
     if dt is None:
         return None
     return dt.strftime("%H:%M:%S")
+
+
+def get_upload_path():
+    """Tạo đường dẫn upload nhất quán"""
+    # Lấy thư mục app/ (từ app/routes/ lên 1 cấp)
+    # __file__ = app/routes/employee.py
+    # dirname(__file__) = app/routes/
+    # dirname(dirname(__file__)) = app/
+    app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(app_dir, "data", "uploads")
