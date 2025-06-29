@@ -2,78 +2,57 @@
 import React from 'react';
 import './EmployeeList.css'; 
 
-// Function to format date and time
-const formatDateTime = (isoString) => {
-  if (!isoString) return 'N/A';
-  try {
-    const date = new Date(isoString);
-    // Customize format as desired, e.g., DD/MM/YYYY HH:MM
-    return date.toLocaleString('vi-VN', { 
-      day: '2-digit', 
-      month: '2-digit', 
-      year: 'numeric', 
-      hour: '2-digit', 
-      minute: '2-digit', 
-      second: '2-digit',
-      hour12: false // 24-hour format
-    });
-  } catch (error) {
-    console.error("Error formatting date:", isoString, error);
-    return 'Invalid Date';
-  }
-};
-
-// Component to display employee list in a table
+// Component để hiển thị danh sách nhân viên dưới dạng bảng
 const EmployeeList = ({ employees, onOpenActionsModal }) => { 
   return (
     <div className="employee-list-container">
-      {/* Employee list title, using utility class for gradient */}
-      <h2 className="employee-list-heading text-gradient-light">Employee List</h2>
+      {/* Tiêu đề danh sách nhân viên */}
+      <h2 className="employee-list-heading text-gradient-light">Danh Sách Nhân Viên</h2>
       {employees.length === 0 ? (
-        // Display message if no employees are found
-        <p className="no-employees-message">No employees found in the list.</p>
+        // Hiển thị thông báo nếu không có nhân viên nào
+        <p className="no-employees-message">Không tìm thấy nhân viên nào trong danh sách.</p>
       ) : (
-        // Table wrapper for horizontal scrolling on small screens
+        // Wrapper cho bảng để xử lý cuộn ngang trên màn hình nhỏ
         <div className="employee-table-wrapper">
           <table className="employee-table">
-            {/* Table header */}
+            {/* Tiêu đề bảng */}
             <thead>
               <tr>
-                <th>Image</th>
-                <th>Employee ID</th>
-                <th>Full Name</th>
-                <th>Department</th>
-                <th>Position</th>
-                <th>Email</th>
-                <th>Phone Number</th>
-                <th>Status</th>
-                <th>Start Date</th> 
-                <th>Last Update</th> 
-                {/* "Actions" column has been REMOVED */}
+                <th>Ảnh</th> 
+                <th>Mã NV</th>
+                <th>Họ Tên</th>
+                <th>Phòng Ban</th>
+                <th>Chức Vụ</th>
+                <th>Email</th> 
+                <th>Số ĐT</th> 
+                <th>Trạng Thái</th> 
+                <th>Ngày Vào Làm</th> 
+                <th>Cập Nhật Cuối</th> 
               </tr>
             </thead>
-            {/* Table body */}
+            {/* Thân bảng */}
             <tbody>
               {employees.map((employee) => (
-                // When clicking on a row, call onOpenActionsModal to open the action selection modal
+                // Khi nhấp vào một hàng, gọi onOpenActionsModal để mở modal chọn hành động
                 <tr 
                   key={employee.employee_id} 
                   onClick={() => onOpenActionsModal(employee)} 
                   className="employee-table-row-clickable" 
                 >
                   <td>
-                    {employee.imageUrl ? ( // Display image if URL exists
+                    {/* Hiển thị ảnh nếu có imageUrl, nếu không thì placeholder */}
+                    {employee.imageUrl ? (
                       <img
-                        src={employee.imageUrl}
+                        src={`http://localhost:5000${employee.imageUrl}`} // <-- Đảm bảo URL đầy đủ
                         alt={employee.full_name}
                         className="employee-table-image"
                         onError={(e) => {
-                          e.target.onerror = null; // Prevent error loop
-                          e.target.src = 'https://placehold.co/50x50/cccccc/ffffff?text=No+Img'; // Placeholder image if loading fails
+                          e.target.onerror = null; 
+                          e.target.src = 'https://placehold.co/50x50/cccccc/ffffff?text=No+Img'; 
                         }}
                       />
                     ) : (
-                      // Placeholder icon if no image
+                      // Placeholder icon nếu không có ảnh
                       <div className="employee-table-image-placeholder">
                         <i className="fas fa-user-circle"></i>
                       </div>
@@ -86,13 +65,13 @@ const EmployeeList = ({ employees, onOpenActionsModal }) => {
                   <td>{employee.email || 'N/A'}</td> 
                   <td>{employee.phone || 'N/A'}</td> 
                   <td>
-                    {/* Display status with colored badge */}
+                    {/* Hiển thị trạng thái với badge màu sắc */}
                     <span className={`status-indicator ${employee.status ? 'active' : 'inactive'}`}>
-                      {employee.status ? 'Active' : 'Inactive'}
+                      {employee.status ? 'Đang Làm' : 'Nghỉ Làm'}
                     </span>
                   </td>
-                  <td>{formatDateTime(employee.created_at)}</td> 
-                  <td>{formatDateTime(employee.updated_at)}</td> 
+                  <td>{employee.created_at || 'N/A'}</td> 
+                  <td>{employee.updated_at || 'N/A'}</td> 
                 </tr>
               ))}
             </tbody>

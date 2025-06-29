@@ -30,7 +30,7 @@ def recognize_face():
 
     employee_id = employee.employee_id
     full_name = employee.full_name
-    
+    department = employee.department
     # Lấy thời gian hiện tại theo timezone VN (consistent với models)
     current_time = get_vn_datetime()
 
@@ -50,7 +50,7 @@ def recognize_face():
         if checkin_log:
             # So sánh naive datetime với naive datetime
             time_diff = current_time - checkin_log.timestamp
-            if time_diff < timedelta(minutes=240):  # 4 giờ
+            if time_diff < timedelta(minutes=0):  # 4 giờ
                 return jsonify({
                     "error": "Cannot check out yet. Must wait at least 4 hours after check-in.",
                     "checked_in_at": format_time_vn(checkin_log.timestamp),
@@ -80,7 +80,8 @@ def recognize_face():
             "message": "Attendance recorded successfully",
             "employee": {
                 "employee_id": employee_id,
-                "full_name": full_name
+                "full_name": full_name,
+                "department": department
             },
             "status": status,
             "timestamp": format_datetime_vn(current_time)

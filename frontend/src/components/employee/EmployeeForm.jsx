@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from 'react';
 import './EmployeeForm.css';
 
-// onDelete is removed from props, as delete functionality is moved to EmployeeActionModal
 const EmployeeForm = ({ initialEmployee = null, onSave, onCancel }) => { 
   const [formData, setFormData] = useState({
     employee_id: '',
@@ -11,7 +10,7 @@ const EmployeeForm = ({ initialEmployee = null, onSave, onCancel }) => {
     position: '',
     phone: '', 
     email: '', 
-    status: true,
+    status: true, 
   });
   const [imageFile, setImageFile] = useState(null); 
   const [imagePreviewUrl, setImagePreviewUrl] = useState(null); 
@@ -27,9 +26,10 @@ const EmployeeForm = ({ initialEmployee = null, onSave, onCancel }) => {
         position: initialEmployee.position || '',
         phone: initialEmployee.phone || '', 
         email: initialEmployee.email || '', 
-        status: initialEmployee.status,
+        status: initialEmployee.status, 
       });
-      setImagePreviewUrl(initialEmployee.imageUrl || null); 
+      // HIỂN THỊ ẢNH CŨ NẾU CÓ imageUrl TỪ initialEmployee
+      setImagePreviewUrl(initialEmployee.imageUrl ? `http://localhost:5000${initialEmployee.imageUrl}` : null); // <-- Đảm bảo URL đầy đủ
       setImageFile(null); 
     } else {
       setFormData({
@@ -64,7 +64,8 @@ const EmployeeForm = ({ initialEmployee = null, onSave, onCancel }) => {
     if (file) {
       setImagePreviewUrl(URL.createObjectURL(file)); 
     } else {
-      setImagePreviewUrl(isEditing && initialEmployee ? initialEmployee.imageUrl : null); 
+      // Nếu không có file mới, và đang edit nhưng không có ảnh cũ từ initialEmployee, thì không có preview
+      setImagePreviewUrl(isEditing && initialEmployee?.imageUrl ? `http://localhost:5000${initialEmployee.imageUrl}` : null); // <-- Đảm bảo URL đầy đủ
     }
     setErrors(prev => ({ ...prev, imageFile: '' })); 
   };
@@ -72,35 +73,35 @@ const EmployeeForm = ({ initialEmployee = null, onSave, onCancel }) => {
   const validateForm = () => {
     let newErrors = {};
     if (!formData.employee_id) {
-      newErrors.employee_id = 'Employee ID is required.';
+      newErrors.employee_id = 'Mã nhân viên là bắt buộc.';
     } else if (formData.employee_id.length !== 8) {
-      newErrors.employee_id = 'Employee ID must be 8 characters long.';
+      newErrors.employee_id = 'Mã nhân viên phải gồm 8 ký tự.';
     } else if (!/^[A-Z0-9]{8}$/i.test(formData.employee_id)) {
-      newErrors.employee_id = 'Employee ID can only contain uppercase letters (A-Z) and numbers (0-9).';
+      newErrors.employee_id = 'Mã nhân viên chỉ có thể chứa chữ cái in hoa (A-Z) và số (0-9).';
     }
 
     if (!formData.full_name) {
-      newErrors.full_name = 'Full name is required.';
+      newErrors.full_name = 'Họ tên là bắt buộc.';
     }
 
     // Validate email
     if (formData.email && !/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(formData.email)) {
-      newErrors.email = 'Invalid email format.';
+      newErrors.email = 'Định dạng email không hợp lệ.';
     }
 
     // Validate phone number (Vietnam format)
     if (formData.phone && !/^(\+84|0)[0-9]{9,10}$/.test(formData.phone)) {
-      newErrors.phone = 'Invalid phone number format (must be Vietnam format).';
+      newErrors.phone = 'Định dạng số điện thoại không hợp lệ (phải là định dạng Việt Nam).';
     }
     
     // Image validation logic
     if (!isEditing && !imageFile) { 
-        newErrors.imageFile = 'Face recognition image is required.';
+        newErrors.imageFile = 'Ảnh nhận diện khuôn mặt là bắt buộc.';
     }
+    // Khi chỉnh sửa: nếu không có ảnh mới được chọn VÀ không có ảnh cũ tồn tại, thì yêu cầu tải ảnh.
     if (isEditing && !imageFile && !initialEmployee?.imageUrl) {
-        newErrors.imageFile = 'Face recognition image is required when editing if no old image exists.';
+        newErrors.imageFile = 'Ảnh nhận diện khuôn mặt là bắt buộc khi chỉnh sửa nếu không có ảnh cũ.';
     }
-
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -109,22 +110,22 @@ const EmployeeForm = ({ initialEmployee = null, onSave, onCancel }) => {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (validateForm()) {
-      onSave({ ...formData, imageFile: imageFile, imageUrl: initialEmployee?.imageUrl || null }, isEditing); 
+      onSave({ ...formData, imageFile: imageFile }, isEditing); 
     } else {
-      console.log("Form has validation errors.");
+      console.log("Form có lỗi xác thực.");
     }
   };
 
   return (
     <div className="employee-form-container">
       <h2 className="employee-form-heading text-gradient-primary">
-        {isEditing ? 'Edit Employee Information' : 'Add New Employee'}
+        {isEditing ? 'Chỉnh Sửa Thông Tin Nhân Viên' : 'Thêm Nhân Viên Mới'}
       </h2>
       <form onSubmit={handleSubmit} className="employee-form">
         <div className="form-layout-two-columns">
           <div className="form-left-column">
             <div className="form-group">
-              <label htmlFor="employee_id">Employee ID <span className="required">*</span></label>
+              <label htmlFor="employee_id">Mã Nhân Viên <span className="required">*</span></label>
               <input
                 type="text"
                 id="employee_id"
@@ -138,7 +139,7 @@ const EmployeeForm = ({ initialEmployee = null, onSave, onCancel }) => {
             </div>
 
             <div className="form-group">
-              <label htmlFor="full_name">Full Name <span className="required">*</span></label>
+              <label htmlFor="full_name">Họ Tên <span className="required">*</span></label>
               <input
                 type="text"
                 id="full_name"
@@ -150,7 +151,7 @@ const EmployeeForm = ({ initialEmployee = null, onSave, onCancel }) => {
             </div>
 
             <div className="form-group">
-              <label htmlFor="department">Department</label>
+              <label htmlFor="department">Phòng Ban</label>
               <input
                 type="text"
                 id="department"
@@ -161,7 +162,7 @@ const EmployeeForm = ({ initialEmployee = null, onSave, onCancel }) => {
             </div>
 
             <div className="form-group">
-              <label htmlFor="position">Position</label>
+              <label htmlFor="position">Chức Vụ</label>
               <input
                 type="text"
                 id="position"
@@ -172,7 +173,7 @@ const EmployeeForm = ({ initialEmployee = null, onSave, onCancel }) => {
             </div>
 
             <div className="form-group">
-              <label htmlFor="phone">Phone Number</label>
+              <label htmlFor="phone">Số Điện Thoại</label>
               <input
                 type="tel" 
                 id="phone"
@@ -203,23 +204,28 @@ const EmployeeForm = ({ initialEmployee = null, onSave, onCancel }) => {
                 checked={formData.status}
                 onChange={handleChange}
               />
-              <label htmlFor="status">Active</label>
+              <label htmlFor="status">Đang Hoạt Động</label>
             </div>
           </div> 
 
           <div className="form-right-column"> 
             <div className="image-upload-section">
-              <h3>Face Recognition Image</h3>
+              <h3>Ảnh Nhận Diện Khuôn Mặt</h3>
               <div className="image-preview-area-upload">
-                {imagePreviewUrl || (isEditing && initialEmployee?.imageUrl) ? (
+                {/* Hiển thị ảnh preview mới hoặc ảnh cũ từ initialEmployee */}
+                {imagePreviewUrl || initialEmployee?.imageUrl ? (
                   <img
-                    src={imagePreviewUrl || initialEmployee.imageUrl}
-                    alt="Employee photo"
+                    src={imagePreviewUrl || `http://localhost:5000${initialEmployee.imageUrl}`} // <-- Đảm bảo URL đầy đủ
+                    alt="Ảnh nhân viên"
                     className="employee-photo-preview"
+                    onError={(e) => {
+                      e.target.onerror = null; 
+                      e.target.src = 'https://placehold.co/160x160/cccccc/ffffff?text=No+Img'; 
+                    }}
                   />
                 ) : (
                   <div className="employee-photo-placeholder">
-                    <span>No image</span>
+                    <span>Chưa có ảnh</span>
                     <i className="fas fa-user-circle"></i> 
                   </div>
                 )}
@@ -234,16 +240,19 @@ const EmployeeForm = ({ initialEmployee = null, onSave, onCancel }) => {
               />
               {errors.imageFile && <p className="error-message">{errors.imageFile}</p>}
 
-              {(imagePreviewUrl || (isEditing && initialEmployee?.imageUrl)) && (
+              {(imagePreviewUrl || initialEmployee?.imageUrl) && ( 
                 <button 
                   type="button" 
                   onClick={() => {
                     setImageFile(null); 
                     setImagePreviewUrl(null); 
+                    if (isEditing && initialEmployee) {
+                      initialEmployee.imageUrl = null; 
+                    }
                   }} 
                   className="clear-image-button danger-button"
                 >
-                  <i className="fas fa-trash-alt"></i> Clear Image
+                  <i className="fas fa-trash-alt"></i> Xóa ảnh
                 </button>
               )}
             </div>
@@ -252,10 +261,10 @@ const EmployeeForm = ({ initialEmployee = null, onSave, onCancel }) => {
 
         <div className="form-actions">
           <button type="button" className="cancel-button secondary-button" onClick={onCancel}>
-            Cancel
+            Hủy Bỏ
           </button>
           <button type="submit" className="save-button primary-button">
-            {isEditing ? 'Save Changes' : 'Add Employee'}
+            {isEditing ? 'Lưu Thay Đổi' : 'Thêm Nhân Viên'}
           </button>
         </div>
       </form>
