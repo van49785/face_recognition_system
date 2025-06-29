@@ -1,15 +1,12 @@
 // src/pages/admin/EmployeeManagement.jsx
 import React, { useState, useEffect } from 'react';
-// import { useNavigate } from 'react-router-dom'; // BỎ IMPORT useNavigate vì không dùng nút Back nữa
 import EmployeeList from '../../components/employee/EmployeeList'; 
 import EmployeeForm from '../../components/employee/EmployeeForm'; 
 import EmployeeActionModal from '../../components/employee/EmployeeActionModal'; 
 import './EmployeeManagement.css'; 
 
-// URL cơ sở của API backend (chỉ chứa host và port, không có '/api' ở cuối)
 const API_BASE_URL = 'http://localhost:5000'; 
 
-// Component chính cho trang quản lý nhân viên
 const EmployeeManagement = ({ setGlobalMessage }) => {
   const [employees, setEmployees] = useState([]); 
   const [searchTerm, setSearchTerm] = useState(''); 
@@ -22,19 +19,18 @@ const EmployeeManagement = ({ setGlobalMessage }) => {
   // State để quản lý bộ lọc trạng thái (mặc định là 'active')
   const [filterStatus, setFilterStatus] = useState('active'); 
 
-  // Hàm tải danh sách nhân viên từ API backend
   const fetchEmployees = async () => {
     try {
-      // Điều chỉnh URL để bao gồm tham số filterStatus
+      // Gọi API với tham số 'status' để backend lọc dữ liệu
       const response = await fetch(`${API_BASE_URL}/api/employees?status=${filterStatus}`);
       if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
+        throw new Error(`Lỗi HTTP! Trạng thái: ${response.status}`);
       }
       const data = await response.json();
       setEmployees(data.employees || []); 
     } catch (error) {
-      console.error("Error fetching employee list:", error);
-      setGlobalMessage('Could not load employee list. Please try again later.', true);
+      console.error("Lỗi khi tải danh sách nhân viên:", error);
+      setGlobalMessage('Không thể tải danh sách nhân viên. Vui lòng thử lại sau.', true);
     }
   };
 
@@ -45,18 +41,20 @@ const EmployeeManagement = ({ setGlobalMessage }) => {
   const filteredEmployees = employees.filter(employee =>
     employee.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     employee.employee_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (employee.email && employee.email.toLowerCase().includes(searchTerm.toLowerCase()))
+    (employee.email && employee.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (employee.phone && employee.phone.includes(searchTerm)) || // Tìm kiếm theo số điện thoại
+    (employee.department && employee.department.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const handleSaveEmployee = async (employeeData, isEditing) => {
     const formData = new FormData(); 
-    formData.append('employee_id', employeeData.employee_id.toUpperCase()); // Chuyển sang chữ hoa
+    formData.append('employee_id', employeeData.employee_id.toUpperCase()); 
     formData.append('full_name', employeeData.full_name);
     formData.append('department', employeeData.department || '');
     formData.append('position', employeeData.position || '');
     formData.append('phone', employeeData.phone || ''); 
     formData.append('email', employeeData.email || ''); 
-    formData.append('status', employeeData.status);
+    formData.append('status', employeeData.status); 
 
     if (employeeData.imageFile) { 
       formData.append('image', employeeData.imageFile);
@@ -65,7 +63,7 @@ const EmployeeManagement = ({ setGlobalMessage }) => {
     try {
       let response;
       if (isEditing) {
-        response = await fetch(`${API_BASE_URL}/api/employees/${employeeData.employee_id.toUpperCase()}`, { // Chuyển sang chữ hoa
+        response = await fetch(`${API_BASE_URL}/api/employees/${employeeData.employee_id.toUpperCase()}`, {
           method: 'PUT',
           body: formData, 
         });
@@ -79,34 +77,33 @@ const EmployeeManagement = ({ setGlobalMessage }) => {
       const responseData = await response.json();
 
       if (!response.ok) {
-        throw new Error(responseData.error || 'Unknown server error.');
+        throw new Error(responseData.error || 'Lỗi không xác định từ máy chủ.');
       }
 
-      setGlobalMessage(responseData.message || (isEditing ? 'Employee updated successfully!' : 'Employee added successfully!'), false);
+      setGlobalMessage(responseData.message || (isEditing ? 'Đã cập nhật nhân viên thành công!' : 'Đã thêm nhân viên thành công!'), false);
       setIsFormModalOpen(false); 
       setCurrentEmployee(null); 
-      fetchEmployees(); // Gọi lại để hiển thị danh sách cập nhật (theo filterStatus hiện tại)
+      fetchEmployees(); 
     } catch (error) {
-      console.error("Error saving employee:", error);
-      setGlobalMessage(`Error: ${error.message}`, true); 
+      console.error("Lỗi khi lưu nhân viên:", error);
+      setGlobalMessage(`Lỗi: ${error.message}`, true); 
     }
   };
 
-  // Hàm xóa MỘT nhân viên (HARD DELETE)
   const handleDeleteEmployee = async (employeeId) => {
-    if (window.confirm('Are you sure you want to PERMANENTLY delete this employee and all related data (attendance records, images)? This action cannot be undone.')) {
+    if (window.confirm('Bạn có chắc chắn muốn ĐẶT TRẠNG THÁI nhân viên này thành "Đã nghỉ việc" không?')) {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/employees/${employeeId.toUpperCase()}`, { // Chuyển sang chữ hoa
-          method: 'DELETE',
+        const response = await fetch(`${API_BASE_URL}/api/employees/${employeeId.toUpperCase()}`, {
+          method: 'DELETE', 
         });
 
         const responseData = await response.json();
 
         if (!response.ok) {
-          throw new Error(responseData.error || 'Unknown server error.');
+          throw new Error(responseData.error || 'Lỗi không xác định từ máy chủ.');
         }
 
-        setGlobalMessage(responseData.message || 'Employee deleted permanently!', false);
+        setGlobalMessage(responseData.message || 'Đã đặt trạng thái nhân viên thành công!', false);
         setIsFormModalOpen(false); 
         setIsActionModalOpen(false); 
         setCurrentEmployee(null); 
@@ -114,18 +111,58 @@ const EmployeeManagement = ({ setGlobalMessage }) => {
         fetchEmployees(); 
       }
       catch (error) {
-        console.error("Error deleting employee:", error);
-        setGlobalMessage(`Error: ${error.message}`, true);
+        console.error("Lỗi khi xóa nhân viên (soft delete):", error);
+        setGlobalMessage(`Lỗi: ${error.message}`, true);
       }
     }
   };
 
-  // BỎ HÀM handleDeleteAllEmployees
+  const handleRestoreEmployee = async (employeeId) => { // Thêm hàm restore
+    if (window.confirm('Bạn có chắc chắn muốn KHÔI PHỤC trạng thái nhân viên này thành "Đang Hoạt Động" không?')) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/employees/${employeeId.toUpperCase()}/restore`, {
+          method: 'PUT',
+        });
 
-  const handleEditEmployee = (employee) => {
-    setCurrentEmployee(employee);
-    setIsFormModalOpen(true);
+        const responseData = await response.json();
+
+        if (!response.ok) {
+          throw new Error(responseData.error || 'Lỗi không xác định từ máy chủ.');
+        }
+
+        setGlobalMessage(responseData.message || 'Đã khôi phục trạng thái nhân viên thành công!', false);
+        setIsFormModalOpen(false); 
+        setIsActionModalOpen(false); 
+        setCurrentEmployee(null); 
+        setSelectedEmployeeForActions(null); 
+        fetchEmployees(); 
+      } catch (error) {
+        console.error("Lỗi khi khôi phục nhân viên:", error);
+        setGlobalMessage(`Lỗi: ${error.message}`, true);
+      }
+    }
   };
+
+
+  const handleEditEmployee = async (employeeFromList) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/employees/${employeeFromList.employee_id.toUpperCase()}`);
+      if (!response.ok) {
+        throw new Error(`Lỗi HTTP khi tải chi tiết nhân viên! Trạng thái: ${response.status}`);
+      }
+      const data = await response.json();
+      
+      // Chuyển đổi định dạng status từ string "active"/"inactive" sang boolean cho form
+      data.employee.status = data.employee.status === 'active';
+
+      setCurrentEmployee(data.employee);
+      setIsFormModalOpen(true);
+    } catch (error) {
+      console.error("Lỗi khi tải chi tiết nhân viên để chỉnh sửa:", error);
+      setGlobalMessage(`Lỗi: ${error.message}`, true);
+    }
+  };
+
 
   const handleOpenForm = () => {
     setCurrentEmployee(null); 
@@ -147,13 +184,11 @@ const EmployeeManagement = ({ setGlobalMessage }) => {
     setSelectedEmployeeForActions(null);
   };
 
-  // BỎ HÀM handleGoBack()
-
   return (
     <div className="employee-management-container">
       <h1 className="page-title text-gradient-light">Quản lý Nhân viên</h1>
 
-      <div className="top-action-row"> {/* Dùng class mới cho hàng này */}
+      <div className="top-action-row">
         <button onClick={handleOpenForm} className="add-employee-button primary-button">
           <i className="fas fa-user-plus"></i> Thêm Nhân viên
         </button>
@@ -166,7 +201,6 @@ const EmployeeManagement = ({ setGlobalMessage }) => {
           className="employee-search-input"
         />
         
-        {/* Nhóm nút lọc trạng thái */}
         <div className="filter-buttons-group">
           <button 
             onClick={() => setFilterStatus('active')} 
@@ -183,8 +217,6 @@ const EmployeeManagement = ({ setGlobalMessage }) => {
         </div>
       </div>
       
-      {/* BỎ NÚT "XÓA TẤT CẢ NHÂN VIÊN VĨNH VIỄN" */}
-
       <EmployeeList 
         employees={filteredEmployees} 
         onOpenActionsModal={handleOpenActionsModal} 
@@ -208,6 +240,7 @@ const EmployeeManagement = ({ setGlobalMessage }) => {
           employee={selectedEmployeeForActions} 
           onEditClick={handleEditEmployee} 
           onDeleteClick={handleDeleteEmployee} 
+          onRestoreClick={handleRestoreEmployee} 
           onClose={handleCloseActionsModal} 
         />
       )}

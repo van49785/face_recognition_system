@@ -1,0 +1,45 @@
+/* src/AppGlobal.css */
+
+/* Global Admin Login Button positioned in top right */
+.global-admin-login-button {
+  position: fixed; /* Fixed position relative to the viewport */
+  top: 20px;       /* 20px from the top */
+  right: 20px;     /* 20px from the right */
+  z-index: 1000;   /* Ensure it's above other content */
+
+  background: linear-gradient(135deg, #4A90E2, #2F6FD8); /* Blue gradient, matching employee button or admin button from StartupModal */
+  color: white;
+  border: none;
+  padding: 12px 25px;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.global-admin-login-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15);
+  opacity: 0.95;
+}
+
+.global-admin-login-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
+}
+
+/* Responsive for the global button */
+@media (max-width: 600px) {
+  .global-admin-login-button {
+    top: 15px;
+    right: 15px;
+    padding: 10px 20px;
+    font-size: 0.9rem;
+    gap: 8px;
+  }
+}

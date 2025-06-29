@@ -8,6 +8,7 @@ from app.models.audit_log import AuditLog
 from app.models.session import Session
 from app.utils.security import check_password_hash, generate_jwt_token
 from app.config import *
+import pytz
 
 def _lock_account(admin: Admin) -> None:
     admin.locked_until = datetime.now(pytz.timezone("Asia/Ho_Chi_Minh")).replace(tzinfo=None) + timedelta(minutes=Config.LOCK_DURATION_MINUTES)
