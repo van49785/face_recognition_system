@@ -204,9 +204,8 @@ def update_employee(employee_id):
             image.save(save_path)
         except Exception as e:
             print(f"Warning: Failed to save updated photo: {str(e)}")
-
-    employee.updated_at = datetime.now(timezone.utc) 
-
+ 
+    employee.updated_at = datetime.now(pytz.timezone("Asia/Ho_Chi_Minh")).replace(tzinfo=None)
     db.session.commit()
 
     return jsonify({
@@ -243,7 +242,7 @@ def restore_employee(employee_id):
         return jsonify({"message": "Employee is already active"}), 200
 
     employee.status = True 
-    employee.updated_at = datetime.now(timezone.utc) 
+    employee.updated_at = datetime.now(pytz.timezone("Asia/Ho_Chi_Minh")).replace(tzinfo=None)
     db.session.commit()
 
     return jsonify({
