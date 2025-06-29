@@ -177,6 +177,8 @@ def update_employee(employee_id):
             # Log error but don't fail the request since DB is already updated
             print(f"Warning: Failed to save updated photo: {str(e)}")
 
+    employee.updated_at = datetime.now(pytz.timezone("Asia/Ho_Chi_Minh")).replace(tzinfo=None)
+
     db.session.commit()
 
     return jsonify({
@@ -199,6 +201,7 @@ def soft_delete_employee(employee_id):
         return jsonify({"message": "Employee is already inactive"}), 200
 
     employee.status = False
+    employee.updated_at = datetime.now(pytz.timezone("Asia/Ho_Chi_Minh")).replace(tzinfo=None)
     db.session.commit()
 
     return jsonify({

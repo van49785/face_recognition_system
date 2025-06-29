@@ -30,6 +30,7 @@ def recognize_face():
 
     employee_id = employee.employee_id
     full_name = employee.full_name
+    department = employee.department
     
     # Lấy thời gian hiện tại theo timezone VN (consistent với models)
     current_time = get_vn_datetime()
@@ -80,7 +81,8 @@ def recognize_face():
             "message": "Attendance recorded successfully",
             "employee": {
                 "employee_id": employee_id,
-                "full_name": full_name
+                "full_name": full_name,
+                "department": department
             },
             "status": status,
             "timestamp": format_datetime_vn(current_time)

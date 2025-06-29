@@ -1,5 +1,6 @@
 from datetime import datetime, timezone, timedelta
 from typing import Tuple, Optional
+import pytz
 
 from app.db import db
 from app.models.admin import Admin
@@ -9,7 +10,7 @@ from app.utils.security import check_password_hash, generate_jwt_token
 from app.config import *
 
 def _lock_account(admin: Admin) -> None:
-    admin.locked_until = datetime.now(timezone.utc) + timedelta(minutes=Config.LOCK_DURATION_MINUTES)
+    admin.locked_until = datetime.now(pytz.timezone("Asia/Ho_Chi_Minh")).replace(tzinfo=None) + timedelta(minutes=Config.LOCK_DURATION_MINUTES)
     db.session.commit()
 
 def login_admin(
@@ -25,7 +26,7 @@ def login_admin(
     if not admin: 
         return None, "Invalid account"
     
-    now_utc = datetime.now(timezone.utc)
+    now_utc = datetime.now(pytz.timezone("Asia/Ho_Chi_Minh")).replace(tzinfo=None)
     if admin.locked_until and admin.locked_until > now_utc:
         AuditLog.log_login(
             admin_id=admin.id,
