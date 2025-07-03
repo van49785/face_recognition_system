@@ -10,40 +10,14 @@ import os
 from io import BytesIO
 from PIL import Image 
 from datetime import datetime, timezone 
-from app.utils.helpers import format_datetime_vn, get_upload_path
+from app.utils.helpers import format_datetime_vn, get_upload_path, serialize_employee_full
 
 employee_bp = Blueprint('employee', __name__)
 
-# Helper function để serialize dữ liệu nhân viên một cách đầy đủ cho danh sách
-# và cho các phản hồi thêm/sửa để đồng nhất dữ liệu frontend.
-def serialize_employee_full(employee):
-    image_filename = f"{employee.employee_id}.jpg"
-    image_path_on_disk = os.path.join(get_upload_path(), image_filename)
-    
-    # URL ảnh sẽ là /uploads/ thay vì /static/faces/
-    # Backend sẽ phục vụ file này thông qua route custom dưới đây
-    image_url = f"/uploads/{image_filename}" if os.path.exists(image_path_on_disk) else None
-
-    return {
-        "id": employee.id,
-        "employee_id": employee.employee_id,
-        "full_name": employee.full_name,
-        "department": employee.department,
-        "position": employee.position,
-        "phone": employee.phone, 
-        "email": employee.email, 
-        "status": employee.status, # Trả về boolean status
-        "created_at": format_datetime_vn(employee.created_at),
-        "updated_at": format_datetime_vn(employee.updated_at),
-        "imageUrl": image_url # Sử dụng URL mới
-    }
-
-# Route để phục vụ các file ảnh từ thư mục 'data/uploads'
-# Chúng ta định nghĩa nó trong employee_bp để nó được quản lý cùng các route nhân viên
 @employee_bp.route('/uploads/<path:filename>')
 def serve_uploaded_image(filename):
-    upload_folder = get_upload_path() # Lấy đường dẫn đã được xác định trong helpers.py
-    print(f"DEBUG: Attempting to serve '{filename}' from physical path: '{upload_folder}'") # <-- THÊM DÒNG NÀY
+    upload_folder = get_upload_path() 
+    print(f"DEBUG: Attempting to serve '{filename}' from physical path: '{upload_folder}'") 
     try:
         return send_from_directory(upload_folder, filename)
     except Exception as e:
