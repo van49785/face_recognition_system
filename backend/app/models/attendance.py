@@ -1,8 +1,10 @@
-from app.db import db
-from datetime import datetime, timezone, date
-import uuid
-import pytz
+# Import các thư viện cần thiết
+from app import db  # SQLAlchemy database instance
+from datetime import datetime, timezone, date  # Xử lý thời gian
+import uuid  # Tạo ID duy nhất
+import pytz  # Xử lý múi giờ
 
+# Model lưu trữ bản ghi chấm công
 class Attendance(db.Model):
     __tablename__ = 'attendance'
     
