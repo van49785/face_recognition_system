@@ -1,1 +1,0 @@
-# Xử lý ảnh (resize, validate, lưu tạm)

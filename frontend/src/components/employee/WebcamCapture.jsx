@@ -6,6 +6,8 @@ import './WebcamCapture.css';
 
 const API_BASE_URL = 'http://localhost:5000';
 
+const API_BASE_URL = 'http://localhost:5000';
+
 const WebcamCapture = ({ setAppGlobalMessage }) => { 
   const webcamRef = useRef(null); 
   const [capturedImage, setCapturedImage] = useState(null); // <-- Tên state là capturedImage, setter là setCapturedImage
@@ -30,7 +32,7 @@ const WebcamCapture = ({ setAppGlobalMessage }) => {
         setAttendanceStatus('');
         setAttendanceTimestamp('');
         setAttendanceMainMessage('');
-      }, 7000); 
+      }, 10000); 
     }
     return () => clearTimeout(timer);
   }, [showResultCard, setCapturedImage, setRecognizedEmployeeBasic, setAttendanceStatus, setAttendanceTimestamp, setAttendanceMainMessage]); 

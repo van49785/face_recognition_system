@@ -12,7 +12,7 @@ const GlobalMessage = ({ message, type, onClose }) => {
         setIsVisible(false);
         // Delay calling onClose until after the fade-out animation
         setTimeout(() => onClose(), 300); // match fade-out duration
-      }, 5000); // Message visible for 5 seconds
+      }, 30000); // Message visible for 5 seconds
       return () => clearTimeout(timer);
     } else {
       setIsVisible(false);
