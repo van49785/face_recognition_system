@@ -2,14 +2,37 @@ import React, { useRef, useState, useCallback } from "react";
 import Webcam from "react-webcam";
 import './WebcamCapture.css'; // Import the new CSS file
 
-// Receive the 'onCapture' prop from the parent component (App.js)
-const WebcamCapture = ({ onCapture }) => { // Add 'onCapture' to props
-  const webcamRef = useRef(null);
-  const [imageSrc, setImageSrc] = useState(null);
-  const [cameraOn, setCameraOn] = useState(true);
-  const [isCapturing, setIsCapturing] = useState(false);
+const API_BASE_URL = 'http://localhost:5000';
 
-  // Use useCallback for performance optimization
+const WebcamCapture = ({ setAppGlobalMessage }) => { 
+  const webcamRef = useRef(null); 
+  const [capturedImage, setCapturedImage] = useState(null); // <-- Tên state là capturedImage, setter là setCapturedImage
+  const [isProcessing, setIsProcessing] = useState(false); 
+  const [cameraOn, setCameraOn] = useState(true); 
+  
+  const [recognizedEmployeeBasic, setRecognizedEmployeeBasic] = useState(null); 
+  const [attendanceStatus, setAttendanceStatus] = useState(''); 
+  const [attendanceTimestamp, setAttendanceTimestamp] = useState(''); 
+  const [attendanceMainMessage, setAttendanceMainMessage] = useState(''); 
+  
+  const [messageType, setMessageType] = useState('success'); 
+  const [showResultCard, setShowResultCard] = useState(false); 
+
+  useEffect(() => {
+    let timer;
+    if (showResultCard) {
+      timer = setTimeout(() => {
+        setShowResultCard(false);
+        setCapturedImage(null); 
+        setRecognizedEmployeeBasic(null); 
+        setAttendanceStatus('');
+        setAttendanceTimestamp('');
+        setAttendanceMainMessage('');
+      }, 10000); 
+    }
+    return () => clearTimeout(timer);
+  }, [showResultCard, setCapturedImage, setRecognizedEmployeeBasic, setAttendanceStatus, setAttendanceTimestamp, setAttendanceMainMessage]); 
+
   const capture = useCallback(() => {
     setIsCapturing(true);
     // Optional: Small delay to create a capture effect

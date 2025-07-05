@@ -1,34 +1,54 @@
-# API chấm công
-import cv2
-import base64
-from flask import Blueprint, request, jsonify
-from app.services.facial_service import FacialRecognitionService
+# backend/app/routes/attendance_report_routes.py
 
+from flask import Blueprint, request, jsonify
+from app.services.attendance_service import (
+    recognize_face_logic,
+    get_attendance_history_logic,
+    get_today_attendance_logic,
+    capture_face_training_logic
+)
+
+# Khởi tạo Blueprint cho các route chấm công
 attendance_bp = Blueprint('attendance', __name__)
 
-@attendance_bp.route('/api/capture', methods=['POST'])
-def capture_image():
-    if 'image' not in request.files:
-        return jsonify({"error": "No image file provided"}), 400
+@attendance_bp.route('/api/recognize', methods=['POST'])
+def recognize_face():
+    """Nhận diện khuôn mặt và ghi nhận chấm công"""
+    image_file = request.files.get('image')
+    base64_image = request.form.get('base64_image')
+    location = request.form.get('location')
+    device_info = request.form.get('device_info')
     
-    image_file = request.files['image']
-    if image_file.filename == '':
-        return jsonify({"error": "No selected file"}), 400
-    
-    # Gọi hàm xử lý ảnh từ FacialRecognitionService
-    success, message, processed_image = FacialRecognitionService.preproccess_image(image_file)
-    if not success:
-        return jsonify({"error": message}), 400
-    
-    # Lưu tạm ảnh trong request để dùng ở API /api/recognize
-    request.imgage_data = processed_image
-    return jsonify({"message": "Photo captured, proceeding to recognition"}), 200
-    # Nếu nhận diện khuôn mặt thành công, trả lại ảnh đã xử lý (ví dụ: encode Base64 để trả về client)
-    # _, encoded_image = cv2.imencode('.jpg', processed_image)
-    # base64_image = base64.b64encode(encoded_image).decode('utf-8')
+    result, error, status = recognize_face_logic(image_file, base64_image, location, device_info)
+    if error:
+        return jsonify(error), status
+    return jsonify(result), status
 
-    # # Trả kết quả cho client
-    # return jsonify({
-    #     "message": "Face detected and image processed successfully",
-    #     "image": base64_image  # Trả ảnh đã xử lý dưới dạng Base64
-    # }), 200
+@attendance_bp.route('/api/attendance/<string:employee_id>', methods=['GET'])
+def get_attendance_history(employee_id):
+    """Lấy lịch sử chấm công của nhân viên"""
+    result, error, status = get_attendance_history_logic(employee_id)
+    if error:
+        return jsonify(error), status
+    return jsonify(result), status
+
+@attendance_bp.route('/api/attendance/today/<string:employee_id>', methods=['GET'])
+def get_today_attendance(employee_id):
+    """Lấy chấm công hôm nay của nhân viên"""
+    result, error, status = get_today_attendance_logic(employee_id)
+    if error:
+        return jsonify(error), status
+    return jsonify(result), status
+
+@attendance_bp.route('/api/face-training/capture', methods=['POST'])
+def capture_face_training():
+    """Capture ảnh training cho nhân viên"""
+    image_file = request.files.get('image')
+    base64_image = request.form.get('base64_image')
+    employee_id = request.form.get('employee_id')
+    pose_type = request.form.get('pose_type')
+    
+    result, error, status = capture_face_training_logic(image_file, base64_image, employee_id, pose_type)
+    if error:
+        return jsonify(error), status
+    return jsonify(result), status
