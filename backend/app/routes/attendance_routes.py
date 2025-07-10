@@ -18,8 +18,10 @@ def recognize_face():
     base64_image = request.form.get('base64_image')
     location = request.form.get('location')
     device_info = request.form.get('device_info')
+    session_id = request.form.get('session_id') # THÊM DÒNG NÀY ĐỂ LẤY session_id TỪ REQUEST
     
-    result, error, status = recognize_face_logic(image_file, base64_image, location, device_info)
+    # THÊM session_id VÀO HÀM GỌI recognize_face_logic
+    result, error, status = recognize_face_logic(image_file, base64_image, location, device_info, session_id)
     if error:
         return jsonify(error), status
     return jsonify(result), status

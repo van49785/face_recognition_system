@@ -22,7 +22,7 @@ def create_app(config_class=Config):
 
     app = Flask(__name__, 
                 static_folder=default_static_folder, 
-                static_url_path='/static'
+                static_url_path='/static',
             )
     app.config.from_object(config_class)
 
@@ -33,8 +33,8 @@ def create_app(config_class=Config):
     
     # Cấu hình CORS chi tiết hơn
     CORS(app, resources={
-        r"/api/*": {"origins": "http://localhost:3000", "methods": ["GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"]},
-        r"/uploads/*": {"origins": "http://localhost:3000", "methods": ["GET", "HEAD", "OPTIONS"]} # Thêm dòng này để CORS cho ảnh
+        r"/api/*": {"origins": ["http://localhost:3000", "http://localhost:5173"], "methods": ["GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"]},
+        r"/uploads/*": {"origins": ["http://localhost:3000", "http://localhost:5173"], "methods": ["GET", "HEAD", "OPTIONS"]} # Thêm dòng này để CORS cho ảnh
     })
 
     # Đăng ký blueprints
