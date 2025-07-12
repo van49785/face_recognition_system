@@ -44,6 +44,15 @@ router.beforeEach(async (to, from, next) => {
   
   // Nếu route yêu cầu authentication
   if (to.meta.requiresAuth) {
+    if (to.meta.requiresAuth !== true) {
+      if (to.name === 'Login' && authStore.isAuthenticated) {
+        const redirectPath = to.query.redirect || '/';
+        next(redirectPath);
+      } else {
+        next();
+      }
+      return; // Quan trọng: return để không chạy code bên dưới
+    }
     if (!authStore.isAuthenticated) {
       console.log('🔒 Route requires auth but user not authenticated, redirecting to login');
       // Lưu route đích để redirect sau khi login
