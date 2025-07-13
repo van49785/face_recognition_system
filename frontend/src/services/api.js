@@ -122,21 +122,21 @@ export const verify = async () => {
   }
 }
 
-export const logout = async () => {
+// Thay đổi hàm này:
+export const logoutAdmin = async () => {
   try {
     console.log('🚪 Logout request')
     
-    await api.post('/api/auth/logout')
+    const response = await api.post('/api/auth/logout')
     
-    console.log('✅ Logout success')
-    return true
+    console.log('✅ Logout success:', response.data)
+    return response.data
     
   } catch (error) {
     console.error('❌ Logout error:', error.response?.data || error.message)
-    // Vẫn logout local ngay cả khi API fail
-    return false
+    throw error
   }
-}
+};
 
 // Face recognition API
 export const recognizeFace = async (formData) => {
@@ -179,16 +179,105 @@ export const getTodayAttendance = async (employee_id) => {
   }
 }
 
-// Employee API functions
-export const getEmployees = async () => {
+// 1. Thêm nhân viên mới (với upload ảnh)
+export const addEmployee = async (formData) => {
   try {
-    console.log('👥 Get employees')
-    const response = await api.get('/api/employees')
+    console.log('👤 Add employee request')
+    
+    const response = await api.post('/api/employees', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    
+    console.log('✅ Add employee success:', response.data)
     return response.data
+    
+  } catch (error) {
+    console.error('❌ Add employee error:', error.response?.data || error.message)
+    throw error
+  }
+}
+
+// 2. Lấy danh sách nhân viên (đã có - cải thiện)
+export const getEmployees = async (params = {}) => {
+  try {
+    console.log('👥 Get employees:', params)
+    
+    const response = await api.get('/api/employees', { params })
+    
+    console.log('✅ Get employees success:', response.data)
+    return response.data
+    
   } catch (error) {
     console.error('❌ Get employees error:', error.response?.data || error.message)
     throw error
   }
 }
+
+// 3. Lấy chi tiết một nhân viên
+export const getEmployeeDetail = async (employee_id) => {
+  try {
+    console.log('👤 Get employee detail:', employee_id)
+    
+    const response = await api.get(`/api/employees/${employee_id}`)
+    
+    console.log('✅ Get employee detail success:', response.data)
+    return response.data
+    
+  } catch (error) {
+    console.error('❌ Get employee detail error:', error.response?.data || error.message)
+    throw error
+  }
+}
+
+// 4. Cập nhật thông tin nhân viên
+export const updateEmployee = async (employee_id, formData) => {
+  try {
+    console.log('🔄 Update employee request:', employee_id)
+    
+    const response = await api.put(`/api/employees/${employee_id}`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    
+    console.log('✅ Update employee success:', response.data)
+    return response.data
+    
+  } catch (error) {
+    console.error('❌ Update employee error:', error.response?.data || error.message)
+    throw error
+  }
+}
+
+// 5. Xóa mềm nhân viên (đánh dấu inactive)
+export const deleteEmployee = async (employee_id) => {
+  try {
+    console.log('🗑️ Delete employee request:', employee_id)
+    
+    const response = await api.delete(`/api/employees/${employee_id}`)
+    
+    console.log('✅ Delete employee success:', response.data)
+    return response.data
+    
+  } catch (error) {
+    console.error('❌ Delete employee error:', error.response?.data || error.message)
+    throw error
+  }
+}
+
+// 6. Khôi phục nhân viên
+export const restoreEmployee = async (employee_id) => {
+  try {
+    console.log('🔄 Restore employee request:', employee_id)
+    
+    const response = await api.put(`/api/employees/${employee_id}/restore`)
+    
+    console.log('✅ Restore employee success:', response.data)
+    return response.data
+    
+  } catch (error) {
+    console.error('❌ Restore employee error:', error.response?.data || error.message)
+    throw error
+  }
+}
+
 
 export default api

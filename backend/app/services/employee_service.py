@@ -97,19 +97,48 @@ def add_employee_logic(data, image_files):
         "poses_trained": pose_types
     }, None, 201
 
-def get_employees_logic(status_param):
-    """Logic lấy danh sách nhân viên, có thể lọc theo trạng thái"""
+def get_employees_logic(status_param=None, page=1, limit=10, search='', sort_by='created_at', sort_order='desc'):
+    """Logic lấy danh sách nhân viên với pagination và search"""
     query = Employee.query
+    
+    # Filter theo status
     if status_param:
         if status_param.lower() == 'active':
             query = query.filter_by(status=True)
         elif status_param.lower() == 'inactive':
             query = query.filter_by(status=False)
-    employees = query.order_by(Employee.created_at.desc()).all()
+    
+    # Search
+    if search:
+        search_term = f"%{search}%"
+        query = query.filter(
+            db.or_(
+                Employee.employee_id.ilike(search_term),
+                Employee.full_name.ilike(search_term),
+                Employee.email.ilike(search_term),
+                Employee.department.ilike(search_term)
+            )
+        )
+    
+    # Sorting
+    sort_column = getattr(Employee, sort_by, Employee.created_at)
+    if sort_order.lower() == 'desc':
+        query = query.order_by(sort_column.desc())
+    else:
+        query = query.order_by(sort_column.asc())
+    
+    # Pagination
+    total = query.count()
+    employees = query.offset((page - 1) * limit).limit(limit).all()
+    
     result = [serialize_employee_full(emp) for emp in employees]
+    
     return {
         "employees": result,
-        "total": len(result)
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "total_pages": (total + limit - 1) // limit
     }, None, 200
 
 def get_employee_detail_logic(employee_id):

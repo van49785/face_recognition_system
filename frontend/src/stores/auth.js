@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { logoutAdmin } from '../services/api';
 
 export const useAuthStore = defineStore('auth', () => {
   // State
@@ -44,23 +45,37 @@ export const useAuthStore = defineStore('auth', () => {
     return true
   }
 
-  const logout = () => {
-    console.log('🚪 Logout called')
+  const logout = async () => { // <--- THÊM 'async' VÌ CHÚNG TA SẼ GỌI API BẤT ĐỒNG BỘ
+    console.log('🚪 Logout called from store');
     
-    token.value = null
-    user.value = null
-    
-    // Xóa khỏi localStorage
+    // 1. Gọi API logout backend
     try {
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
-      console.log('🗑️ localStorage cleared')
-    } catch (e) {
-      console.error('❌ Error clearing localStorage:', e)
-    }
+      if (token.value) { // Chỉ gọi API nếu có token (người dùng đang đăng nhập)
+        await logoutAdmin();
+      }
+      console.log('✅ Backend logout successful or not needed (no token).');
+    } catch (error) {
+      console.error('❌ Error during backend logout API call, but proceeding with frontend logout:', error);
+      // Xử lý lỗi API (ví dụ: hiển thị thông báo lỗi cho người dùng)
+      // Mặc dù API thất bại, chúng ta vẫn nên xóa token ở frontend để tránh trạng thái không đồng bộ
+      // và cho phép người dùng đăng nhập lại nếu muốn.
+    } finally {
+      // Xóa token và user khỏi Pinia store
+      token.value = null;
+      user.value = null;
+      
+      // Xóa token và user khỏi localStorage
+      try {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        console.log('✅ Auth data cleared from localStorage');
+      } catch (e) {
+        console.error('❌ Error clearing localStorage:', e);
+      }
     
-    error.value = null
-  }
+      error.value = null;
+    }
+  };
 
   const setLoading = (loading) => {
     isLoading.value = loading

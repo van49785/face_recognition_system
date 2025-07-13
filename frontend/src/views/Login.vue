@@ -239,7 +239,7 @@ const handleLogin = async () => {
     }
     
     /* ❺ CHUYỂN TRANG */
-    // router.push('/')
+    router.push('/')
     
   } catch (error) {
     console.error('❌ Login error:', error)

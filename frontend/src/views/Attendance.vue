@@ -21,11 +21,13 @@
       </div>
 
       <div class="card">
+        <!-- Camera Section -->
         <div v-if="currentStep === 'camera'" class="section">
           <div class="camera-section">
             <Camera />
             <h2>Face Recognition</h2>
-            <p>{{ statusMessage }}</p> </div>
+            <p>{{ statusMessage }}</p>
+          </div>
 
           <div class="video-container">
             <div class="video-frame">
@@ -39,13 +41,15 @@
                 <div class="bottom-right"></div>
               </div>
             </div>
-            <div class="action-buttons mt-4">
+            
+            <div class="camera-controls">
               <v-btn
                 v-if="isCameraActive"
                 @click="stopWebcam"
                 color="red-darken-2"
                 size="large"
                 prepend-icon="mdi-webcam-off"
+                class="control-button"
               >
                 Turn off Webcam
               </v-btn>
@@ -55,6 +59,7 @@
                 color="green-darken-2"
                 size="large"
                 prepend-icon="mdi-webcam"
+                class="control-button"
               >
                 Turn on Webcam
               </v-btn>
@@ -62,19 +67,22 @@
           </div>
         </div>
 
+        <!-- Processing Section -->
         <div v-if="currentStep === 'processing'" class="section processing-section">
-          <div>
+          <div class="processing-content">
             <div class="processing-icon">
               <RefreshCw class="animate-spin" />
             </div>
             <h2>Processing...</h2>
-            <p>{{ statusMessage }}</p> </div>
+            <p>{{ statusMessage }}</p>
+          </div>
           
           <div class="progress-bar">
             <div class="progress-fill"></div>
           </div>
         </div>
 
+        <!-- Success Section -->
         <div v-if="currentStep === 'success' && employee" class="section">
           <div class="success-section">
             <div class="success-icon">
@@ -89,7 +97,7 @@
               <div class="employee-avatar">
                 {{ employee.full_name.split(' ').map(n => n[0]).join('') }}
               </div>
-              <div>
+              <div class="employee-details-text">
                 <h3>{{ employee.full_name }}</h3>
                 <p>ID: {{ employee.employee_id }}</p>
                 <p>{{ employee.department }}</p>
@@ -100,7 +108,7 @@
               <div class="detail-box">
                 <Clock />
                 <p>Time</p>
-                <p>{{ employee.timestamp }}</p>
+                <p>{{ formatTimestamp(employee.timestamp) }}</p>
               </div>
               <div class="detail-box">
                 <Calendar />
@@ -112,25 +120,61 @@
 
           <div class="action-buttons">
             <v-btn
-              @click="viewHistory"
-              color="purple-darken-3"
-              size="large"
-              prepend-icon="mdi-history"
-            >
-              View Attendance History
-            </v-btn>
-            <v-btn
               @click="resetCamera"
               color="blue-grey-darken-1"
               size="large"
               prepend-icon="mdi-refresh"
+              class="action-button"
             >
-              New Checkin
+              New Check-in
             </v-btn>
+            <v-btn
+              @click="viewHistory"
+              color="purple-darken-3"
+              size="large"
+              prepend-icon="mdi-history"
+              class="action-button"
+            >
+              View History
+            </v-btn>
+          </div>
+
+          <!-- History Section - Moved here, below success section -->
+          <div v-if="showHistory" class="history-section">
+            <div class="history-header">
+              <h3>Recent Attendance History</h3>
+              <button @click="showHistory = false" class="close-history-button">
+                <RefreshCw />
+              </button>
+            </div>
+
+            <div class="history-list">
+              <div
+                v-for="(record, index) in attendanceHistory"
+                :key="index"
+                class="history-item"
+              >
+                <div class="history-details">
+                  <div class="history-icon">
+                    <Calendar />
+                  </div>
+                  <div class="history-info">
+                    <p class="history-date">{{ formatHistoryDate(record.date) }}</p>
+                    <p class="history-time">
+                      In: {{ record.check_in || 'N/A' }} • Out: {{ record.check_out || 'N/A' }}
+                    </p>
+                  </div>
+                </div>
+                <span :class="getStatusBadge(record.status)">
+                  {{ record.status }}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div v-if="showHistory" class="section">
+        <!-- Standalone History Section (when accessed directly) -->
+        <div v-if="showHistory && currentStep !== 'success'" class="section">
           <div class="history-header">
             <h2>Attendance History</h2>
             <button @click="showHistory = false" class="refresh-button">
@@ -148,10 +192,10 @@
                 <div class="history-icon">
                   <Calendar />
                 </div>
-                <div>
-                  <p>{{ record.date }}</p>
-                  <p>
-                    In: {{ record.check_in }} • Out: {{ record.check_out }}
+                <div class="history-info">
+                  <p class="history-date">{{ formatHistoryDate(record.date) }}</p>
+                  <p class="history-time">
+                    In: {{ record.check_in || 'N/A' }} • Out: {{ record.check_out || 'N/A' }}
                   </p>
                 </div>
               </div>
@@ -178,10 +222,8 @@
 
 <script>
 import { Camera, User, Clock, Calendar, History, CheckCircle, AlertCircle, RefreshCw } from 'lucide-vue-next';
-import { ref, onMounted, onBeforeUnmount } from 'vue';
-import { useAuthStore } from '../stores/auth';
 import { recognizeFace, getAttendanceHistory } from '../services/api';
-import { v4 as uuidv4 } from 'uuid'; // Import UUID library
+import { v4 as uuidv4 } from 'uuid';
 
 export default {
   name: 'AttendanceInterface',
@@ -197,7 +239,7 @@ export default {
   },
   data() {
     return {
-      currentStep: 'camera', // 'camera', 'processing', 'success', 'history'
+      currentStep: 'camera',
       isProcessing: false,
       employee: null,
       attendanceRecord: null,
@@ -207,8 +249,8 @@ export default {
       stream: null,
       recognitionInterval: null,
       isCameraActive: false,
-      sessionId: null, // THÊM sessionId VÀO DATA
-      statusMessage: "Scanning for your face, please look directly at the camera.", // THÊM statusMessage
+      sessionId: null,
+      statusMessage: "Scanning for your face, please look directly at the camera.",
     };
   },
   watch: {
@@ -216,7 +258,6 @@ export default {
       if (newVal === 'camera') {
         this.startCamera();
       } else {
-        // Stop continuous recognition when not in camera step
         this.stopContinuousRecognition();
       }
     }
@@ -225,9 +266,99 @@ export default {
     this.startCamera();
   },
   beforeUnmount() {
-    this.stopContinuousRecognition(); // Ensure to stop on unmount
+    this.stopContinuousRecognition();
   },
   methods: {
+    formatTimestamp(timestamp) {
+      if (!timestamp) return 'N/A';
+      try {
+        let date;
+        
+        // Check if timestamp is already in DD/MM/YYYY HH:mm:ss format
+        if (typeof timestamp === 'string' && timestamp.includes('/')) {
+          // Parse DD/MM/YYYY HH:mm:ss format
+          const parts = timestamp.split(' ');
+          if (parts.length === 2) {
+            const datePart = parts[0]; // "13/07/2025"
+            const timePart = parts[1]; // "23:55:47"
+            
+            const dateComponents = datePart.split('/');
+            if (dateComponents.length === 3) {
+              const day = dateComponents[0];
+              const month = dateComponents[1];
+              const year = dateComponents[2];
+              
+              // Create date in MM/DD/YYYY format for JavaScript Date constructor
+              const jsDateString = `${month}/${day}/${year} ${timePart}`;
+              date = new Date(jsDateString);
+            }
+          }
+        } else {
+          // Try parsing as ISO string or other formats
+          date = new Date(timestamp);
+        }
+        
+        if (!date || isNaN(date.getTime())) {
+          console.error('Invalid date:', timestamp);
+          return timestamp; // Return original if parsing fails
+        }
+        
+        return date.toLocaleString('en-US', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false
+        });
+      } catch (error) {
+        console.error('Error formatting timestamp:', error);
+        return timestamp; // Return original if error occurs
+      }
+    },
+    
+formatHistoryDate(dateString) {
+  if (!dateString) return 'N/A';
+  try {
+    let date;
+    
+    // Check if dateString is in YYYY-MM-DD format (from our historyMap)
+    if (typeof dateString === 'string' && dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      date = new Date(dateString + 'T00:00:00'); // Add time to avoid timezone issues
+    } 
+    // Check if dateString is in DD/MM/YYYY format
+    else if (typeof dateString === 'string' && dateString.includes('/')) {
+      const parts = dateString.split('/');
+      if (parts.length === 3) {
+        const day = parts[0];
+        const month = parts[1];
+        const year = parts[2];
+        
+        // Create date in MM/DD/YYYY format for JavaScript Date constructor
+        const jsDateString = `${month}/${day}/${year}`;
+        date = new Date(jsDateString);
+      }
+    } else {
+      date = new Date(dateString);
+    }
+    
+    if (!date || isNaN(date.getTime())) {
+      console.error('Invalid date:', dateString);
+      return dateString; // Return original if parsing fails
+    }
+    
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+  } catch (error) {
+    console.error('Error formatting history date:', error);
+    return dateString; // Return original if error occurs
+  }
+},
+
     async startCamera() {
       try {
         const mediaStream = await navigator.mediaDevices.getUserMedia({
@@ -238,7 +369,7 @@ export default {
           this.$refs.videoRef.srcObject = mediaStream;
         }
         this.isCameraActive = true;
-        this.statusMessage = "Scanning for your face, please look directly at the camera."; // Reset message
+        this.statusMessage = "Scanning for your face, please look directly at the camera.";
         this.startContinuousRecognition();
       } catch (err) {
         this.error = 'Cannot access camera. Please check permissions.';
@@ -246,16 +377,17 @@ export default {
         this.statusMessage = "Camera access denied or unavailable.";
       }
     },
+
     startContinuousRecognition() {
       if (this.recognitionInterval) {
         clearInterval(this.recognitionInterval);
       }
-      this.sessionId = uuidv4(); // TẠO MỘT session_id MỚI MỖI KHI BẮT ĐẦU NHẬN DIỆN LIÊN TỤC
-      if (this.isCameraActive){
-        // Gửi khung hình mỗi 1 giây (1000ms) để backend có đủ dữ liệu liveness
-        this.recognitionInterval = setInterval(this.sendFrameForRecognition, 3000); 
+      this.sessionId = uuidv4();
+      if (this.isCameraActive) {
+        this.recognitionInterval = setInterval(this.sendFrameForRecognition, 3000);
       }
     },
+
     stopContinuousRecognition() {
       if (this.recognitionInterval) {
         clearInterval(this.recognitionInterval);
@@ -266,11 +398,11 @@ export default {
         this.stream = null;
       }
       this.isCameraActive = false;
-      if (this.$refs.videoRef){
+      if (this.$refs.videoRef) {
         this.$refs.videoRef.srcObject = null;
       }
-      this.sessionId = null; // Xóa session ID khi dừng
-      this.statusMessage = "Webcam turned off. Ready to start new recognition."; // Reset message
+      this.sessionId = null;
+      this.statusMessage = "Webcam turned off. Ready to start new recognition.";
     },
 
     stopWebcam() {
@@ -286,16 +418,15 @@ export default {
         clearInterval(this.recognitionInterval);
         this.recognitionInterval = null;
       }
-      this.sessionId = null; // Xóa session ID khi dừng
+      this.sessionId = null;
       console.log('Webcam is already turn off.');
       this.currentStep = 'camera';
       this.isProcessing = false;
       this.error = '';
-      this.statusMessage = "Webcam turned off. Ready to start new recognition."; // Reset message
+      this.statusMessage = "Webcam turned off. Ready to start new recognition.";
     },
 
     async sendFrameForRecognition() {
-      // Chỉ xử lý nếu không đang xử lý và ở bước camera
       if (this.isProcessing || this.currentStep !== 'camera') {
         return;
       }
@@ -306,8 +437,8 @@ export default {
       }
 
       this.isProcessing = true;
-      this.error = ''; // Xóa lỗi cũ
-      this.statusMessage = "Processing... Recognizing your face, please wait"; // Hiển thị trạng thái processing
+      this.error = '';
+      this.statusMessage = "Processing... Recognizing your face, please wait";
 
       const canvas = this.$refs.canvasRef;
       const video = this.$refs.videoRef;
@@ -319,29 +450,13 @@ export default {
 
       try {
         const base64Image = canvas.toDataURL('image/jpeg', 0.9).split(',')[1];
-        
-        const authStore = useAuthStore();
-        if (!authStore.isAuthenticated) {
-          this.error = 'Please log in to continue.';
-          this.currentStep = 'camera';
-          this.isProcessing = false;
-          this.statusMessage = "Please log in to continue.";
-          return;
-        }
-
-        // GỬI session_id CÙNG VỚI ẢNH
         const response = await recognizeFace({ base64_image: base64Image, session_id: this.sessionId });
 
-        // THÊM LOGGING ĐỂ DEBUG
         console.log('🎯 Full API Response:', response);
-        console.log('🎯 Response message:', response.message);
-        console.log('🎯 Response employee:', response.employee);
 
-        // Cập nhật trạng thái và thông báo dựa trên phản hồi từ backend
         if (response.message === 'Attendance recorded successfully') {
           console.log('🎯 Processing successful response...');
           
-          // Kiểm tra dữ liệu employee
           if (response.employee && response.employee.full_name) {
             this.employee = {
               employee_id: response.employee.employee_id,
@@ -357,17 +472,9 @@ export default {
               timestamp: response.timestamp
             };
             
-            console.log('🎯 Employee data set:', this.employee);
-            console.log('🎯 Attendance record set:', this.attendanceRecord);
-            
-            // Dừng continuous recognition trước khi chuyển step
             this.stopContinuousRecognition();
-            
-            // Chuyển sang success step
             this.currentStep = 'success';
             this.statusMessage = "Check-in Successful!";
-            
-            console.log('🎯 Current step changed to:', this.currentStep);
             
           } else {
             console.error('❌ No employee data in response:', response);
@@ -378,19 +485,16 @@ export default {
           }
           
         } else if (response.message && response.message.includes("Loading liveness check")) {
-          // Nếu backend đang kiểm tra sự sống, cập nhật thông báo và tiếp tục loop
           this.statusMessage = response.message;
           this.currentStep = 'camera';
           this.isProcessing = false;
           
         } else if (response.message && response.message.includes("Liveness checking successfully")) {
-          // Nếu liveness đã thành công nhưng chưa nhận diện được người
           this.statusMessage = response.message + " Detecting face...";
           this.currentStep = 'camera';
           this.isProcessing = false;
           
         } else {
-          // Trường hợp lỗi khác
           console.log('🎯 Other response:', response.message);
           this.error = response.message || 'Face recognition failed. Please try again.';
           this.statusMessage = response.message || 'Face recognition failed. Please try again.';
@@ -406,6 +510,7 @@ export default {
         this.isProcessing = false;
       }
     },
+
     async viewHistory() {
       try {
         if (!this.employee || !this.employee.employee_id) {
@@ -413,41 +518,93 @@ export default {
           return;
         }
 
-        this.stopWebcam(); // Dừng webcam khi chuyển sang xem lịch sử
-
         const employeeIdToFetch = this.employee.employee_id;
-
         const response = await getAttendanceHistory(employeeIdToFetch);
         
         const historyMap = {};
+        
         response.records.forEach(record => {
-          const date = new Date(record.timestamp).toLocaleDateString('en-CA'); // YYYY-MM-DD
-          if (!historyMap[date]) {
-            historyMap[date] = { date, check_in: null, check_out: null, status: 'Absent' };
+          let date;
+          
+          // Parse timestamp từ backend (có thể là DD/MM/YYYY HH:mm:ss)
+          if (record.timestamp) {
+            if (typeof record.timestamp === 'string' && record.timestamp.includes('/')) {
+              // Parse DD/MM/YYYY HH:mm:ss format
+              const parts = record.timestamp.split(' ');
+              if (parts.length >= 1) {
+                const datePart = parts[0]; // "13/07/2025"
+                const dateComponents = datePart.split('/');
+                if (dateComponents.length === 3) {
+                  const day = dateComponents[0];
+                  const month = dateComponents[1];
+                  const year = dateComponents[2];
+                  
+                  // Create date in MM/DD/YYYY format for JavaScript Date constructor
+                  const jsDateString = `${month}/${day}/${year}`;
+                  date = new Date(jsDateString);
+                }
+              }
+            } else {
+              // Try parsing as ISO string or other formats
+              date = new Date(record.timestamp);
+            }
           }
+          
+          // Fallback to current date if parsing fails
+          if (!date || isNaN(date.getTime())) {
+            console.error('Invalid timestamp in record:', record.timestamp);
+            date = new Date(); // Use current date as fallback
+          }
+          
+          // Format date as YYYY-MM-DD for consistency
+          const dateKey = date.toLocaleDateString('en-CA'); // This returns YYYY-MM-DD format
+          
+          if (!historyMap[dateKey]) {
+            historyMap[dateKey] = { 
+              date: dateKey, 
+              check_in: null, 
+              check_out: null, 
+              status: 'Absent' 
+            };
+          }
+          
+          // Format time for display
+          const timeString = date.toLocaleTimeString('en-US', { 
+            hour12: false,
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+          });
+          
           if (record.status === 'check-in') {
-            historyMap[date].check_in = new Date(record.timestamp).toLocaleTimeString('en-US', { hour12: false });
-            historyMap[date].status = record.attendance_type === 'late' ? 'Late' : 'Present';
+            historyMap[dateKey].check_in = timeString;
+            historyMap[dateKey].status = record.attendance_type === 'late' ? 'Late' : 'Present';
           } else if (record.status === 'check-out') {
-            historyMap[date].check_out = new Date(record.timestamp).toLocaleTimeString('en-US', { hour12: false });
+            historyMap[dateKey].check_out = timeString;
           }
         });
 
-        this.attendanceHistory = Object.values(historyMap).sort((a,b) => new Date(b.date) - new Date(a.date)).slice(0, 50); // Sắp xếp theo ngày giảm dần
+        this.attendanceHistory = Object.values(historyMap)
+          .sort((a, b) => new Date(b.date) - new Date(a.date))
+          .slice(0, 10);
+        
         this.showHistory = true;
+        
       } catch (err) {
+        console.error('Error loading attendance history:', err);
         this.error = err.response?.data?.error || 'Failed to load attendance history.';
       }
     },
+
     resetCamera() {
       this.currentStep = 'camera';
       this.employee = null;
       this.attendanceRecord = null;
       this.error = '';
       this.showHistory = false;
-      this.statusMessage = "Scanning for your face, please look directly at the camera."; // Reset message
-      // startCamera will be called by the watch:currentStep, which will restart the continuous recognition
+      this.statusMessage = "Scanning for your face, please look directly at the camera.";
     },
+
     getStatusBadge(status) {
       switch (status) {
         case 'Present': return 'badge badge-present';
@@ -461,95 +618,93 @@ export default {
 </script>
 
 <style scoped>
-/* (Giữ nguyên phần CSS đã có) */
 .container {
-  min-height: 100%;
-  overflow: hidden;
-  background: linear-gradient(to bottom right, #3b82f6, #9333ea, #6b21a8);
-  padding: 16px;
-  color: var(--vt-c-text-light-1);
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 20px;
+  color: white;
   width: 100vw;
   box-sizing: border-box;
 }
 
 .background-decoration-top {
   position: fixed;
-  top: 0;
-  right: 0;
-  width: 100%;
-  height: 100%;
+  top: -50px;
+  right: -50px;
+  width: 300px;
+  height: 300px;
   background: rgba(255, 255, 255, 0.1);
   border-radius: 50%;
-  transform: translateY(-128px) translateX(128px);
-  animation: pulse 3s infinite;
+  animation: pulse 4s infinite;
 }
 
 .background-decoration-bottom {
   position: fixed;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  bottom: -50px;
+  left: -50px;
+  width: 200px;
+  height: 200px;
   background: rgba(255, 255, 255, 0.05);
   border-radius: 50%;
-  transform: translateY(192px) translateX(-192px);
   animation: pulse 3s infinite;
 }
 
 @keyframes pulse {
-  0% { opacity: 0.6; }
-  50% { opacity: 0.3; }
-  100% { opacity: 0.6; }
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 0.3; transform: scale(1.05); }
 }
 
 .main-content-wrapper {
-  width: 100%;
-  margin: 0;
+  max-width: 500px;
+  margin: 0 auto;
   padding: 0 16px;
-  box-sizing: border-box;
 }
 
 .header {
   text-align: center;
-  margin-bottom: 32px;
+  margin-bottom: 30px;
 }
 
 .header-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 64px;
-  height: 64px;
+  width: 70px;
+  height: 70px;
   background: rgba(255, 255, 255, 0.2);
-  border-radius: 16px;
-  margin-bottom: 16px;
+  border-radius: 20px;
+  margin-bottom: 20px;
+  backdrop-filter: blur(10px);
 }
 
 .header-icon svg {
-  width: 32px;
-  height: 32px;
-  color: var(--vt-c-white);
+  width: 35px;
+  height: 35px;
+  color: white;
 }
 
 .header-title {
-  font-size: 30px;
-  font-weight: bold;
-  color: var(--vt-c-white);
+  font-size: 32px;
+  font-weight: 700;
+  color: white;
   margin-bottom: 8px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .header-subtitle {
-  color: rgba(147, 197, 255, 0.8);
+  color: rgba(255, 255, 255, 0.9);
   font-size: 16px;
+  font-weight: 400;
 }
 
 .error-alert {
-  background: rgba(239, 68, 68, 0.2);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 12px;
-  padding: 16px;
+  background: rgba(239, 68, 68, 0.9);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  border-radius: 16px;
+  padding: 20px;
   margin-bottom: 24px;
   text-align: center;
+  backdrop-filter: blur(10px);
 }
 
 .error-content {
@@ -562,72 +717,59 @@ export default {
 .error-content svg {
   width: 20px;
   height: 20px;
-  color: rgba(254, 226, 226, 0.8);
   margin-right: 8px;
 }
 
-.error-content span {
-  color: rgba(254, 226, 226, 0.8);
-  font-weight: 500;
-}
-
-.error-alert p {
-  color: rgba(254, 226, 226, 0.8);
-  font-size: 14px;
-}
-
 .card {
-  width: 100%;
   background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  border-radius: 16px;
-  box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
-  overflow-x: hidden;
-  max-height: calc(100vh - 260px);
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
+  backdrop-filter: blur(20px);
+  border-radius: 24px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
 }
 
 .section {
-  padding: 24px 0;
+  padding: 30px 24px;
 }
 
 .camera-section {
   text-align: center;
-  margin-bottom: 24px;
+  margin-bottom: 30px;
 }
 
 .camera-section svg {
-  width: 48px;
-  height: 48px;
-  color: #2563eb;
-  margin: 0 auto 12px;
+  width: 50px;
+  height: 50px;
+  color: #667eea;
+  margin-bottom: 16px;
 }
 
 .camera-section h2 {
-  font-size: 24px;
-  font-weight: bold;
-  color: #1f2937;
-  margin-bottom: 8px;
+  font-size: 26px;
+  font-weight: 700;
+  color: #1a202c;
+  margin-bottom: 10px;
 }
 
 .camera-section p {
-  color: #4b5563;
+  color: #4a5568;
   font-size: 16px;
+  line-height: 1.5;
 }
 
 .video-container {
-  position: relative;
-  max-width: 448px;
+  max-width: 400px;
   margin: 0 auto;
 }
 
 .video-frame {
   aspect-ratio: 1/1;
-  background: #f3f4f6;
-  border-radius: 16px;
+  background: #f7fafc;
+  border-radius: 20px;
   overflow: hidden;
   position: relative;
+  margin-bottom: 20px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
 }
 
 .video-frame video {
@@ -638,426 +780,696 @@ export default {
 
 .video-frame canvas {
   display: none;
-  width: 100%;
-  height: 100%;
 }
 
 .face-overlay {
   position: absolute;
-  top: 16px;
-  right: 16px;
-  bottom: 16px;
-  left: 16px;
-  border: 2px solid #3b82f6;
-  border-radius: 12px;
-  opacity: 0.6;
+  top: 20px;
+  right: 20px;
+  bottom: 20px;
+  left: 20px;
+  border: 3px solid #667eea;
+  border-radius: 16px;
+  opacity: 0.8;
 }
 
 .face-overlay div {
   position: absolute;
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
 }
 
 .top-left {
-  top: 0;
-  left: 0;
-  border-top: 4px solid #3b82f6;
-  border-left: 4px solid #3b82f6;
-  border-top-left-radius: 8px;
+  top: -3px;
+  left: -3px;
+  border-top: 6px solid #667eea;
+  border-left: 6px solid #667eea;
+  border-top-left-radius: 12px;
 }
 
 .top-right {
-  top: 0;
-  right: 0;
-  border-top: 4px solid #3b82f6;
-  border-right: 4px solid #3b82f6;
-  border-top-right-radius: 8px;
+  top: -3px;
+  right: -3px;
+  border-top: 6px solid #667eea;
+  border-right: 6px solid #667eea;
+  border-top-right-radius: 12px;
 }
 
 .bottom-left {
-  bottom: 0;
-  left: 0;
-  border-bottom: 4px solid #3b82f6;
-  border-left: 4px solid #3b82f6;
-  border-bottom-left-radius: 8px;
+  bottom: -3px;
+  left: -3px;
+  border-bottom: 6px solid #667eea;
+  border-left: 6px solid #667eea;
+  border-bottom-left-radius: 12px;
 }
 
 .bottom-right {
-  bottom: 0;
-  right: 0;
-  border-bottom: 4px solid #3b82f6;
-  border-right: 4px solid #3b82f6;
-  border-bottom-right-radius: 8px;
+  bottom: -3px;
+  right: -3px;
+  border-bottom: 6px solid #667eea;
+  border-right: 6px solid #667eea;
+  border-bottom-right-radius: 12px;
 }
 
-/* Removed capture-button styles as the button is removed */
+.camera-controls {
+  display: flex;
+  justify-content: center;
+}
+
+.control-button {
+  border-radius: 16px !important;
+  padding: 12px 24px !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+}
 
 .processing-section {
   text-align: center;
+}
+
+.processing-content {
+  margin-bottom: 30px;
 }
 
 .processing-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 96px;
-  height: 96px;
-  background: #dbeafe;
+  width: 100px;
+  height: 100px;
+  background: #e6f3ff;
   border-radius: 50%;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .processing-icon svg {
-  width: 48px;
-  height: 48px;
-  color: #2563eb;
+  width: 50px;
+  height: 50px;
+  color: #667eea;
 }
 
 .processing-section h2 {
-  font-size: 24px;
-  font-weight: bold;
-  color: #1f2937;
-  margin-bottom: 8px;
+  font-size: 26px;
+  font-weight: 700;
+  color: #1a202c;
+  margin-bottom: 10px;
 }
 
 .processing-section p {
-  color: #4b5563;
+  color: #4a5568;
   font-size: 16px;
 }
 
 .progress-bar {
-  max-width: 448px;
+  width: 100%;
+  max-width: 300px;
   margin: 0 auto;
-  background: #f3f4f6;
-  border-radius: 9999px;
-  height: 8px;
-  margin-bottom: 16px;
+  background: #e2e8f0;
+  border-radius: 10px;
+  height: 10px;
+  overflow: hidden;
 }
 
 .progress-fill {
   width: 70%;
   height: 100%;
-  background: #2563eb;
-  border-radius: 9999px;
-  animation: pulse 2s infinite;
+  background: linear-gradient(90deg, #667eea, #764ba2);
+  border-radius: 10px;
+  animation: progress-pulse 2s infinite;
+}
+
+@keyframes progress-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
 }
 
 .success-section {
   text-align: center;
-  margin-bottom: 24px;
+  margin-bottom: 30px;
 }
 
 .success-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 80px;
-  height: 80px;
-  background: #dcfce7;
+  width: 90px;
+  height: 90px;
+  background: #f0fff4;
   border-radius: 50%;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .success-icon svg {
-  width: 48px;
-  height: 48px;
-  color: #16a34a;
+  width: 50px;
+  height: 50px;
+  color: #48bb78;
 }
 
 .success-section h2 {
-  font-size: 24px;
-  font-weight: bold;
-  color: #1f2937;
-  margin-bottom: 8px;
+  font-size: 26px;
+  font-weight: 700;
+  color: #1a202c;
+  margin-bottom: 10px;
 }
 
 .success-section p {
-  color: #4b5563;
+  color: #4a5568;
   font-size: 16px;
 }
 
 .employee-card {
-  background: linear-gradient(to right, #eff6ff, #f3e8ff);
-  border-radius: 12px;
-  padding: 24px;
-  margin-bottom: 24px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  transition: transform 0.2s ease-in-out;
-}
-
-.employee-card:hover {
-  transform: translateY(-5px); /* Hiệu ứng nhấc lên khi hover */
+  background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+  border-radius: 20px;
+  padding: 25px;
+  margin-bottom: 30px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
 }
 
 .employee-info {
   display: flex;
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .employee-avatar {
-  width: 72px;
-  height: 64px;
-  background: linear-gradient(45deg, #3b82f6, #9333ea);
+  width: 80px;
+  height: 80px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #ffffff;
-  font-size: 24px;
-  font-weight: bold;
-  margin-right: 16px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  color: white;
+  font-size: 28px;
+  font-weight: 700;
+  margin-right: 20px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
 }
 
-.employee-info h3 {
+.employee-details-text h3 {
   font-size: 22px;
-  font-weight: bold;
-  color: #1f2937;
+  font-weight: 700;
+  color: #1a202c;
+  margin-bottom: 5px;
 }
 
-.employee-info p {
-  color: #6b7280;
+.employee-details-text p {
+  color: #4a5568;
   font-size: 14px;
-  margin-top: 4px;
+  margin-bottom: 3px;
 }
 
 .employee-details {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  gap: 15px;
 }
 
 .detail-box {
-  background: #ffffff;
-  border-radius: 10px;
-  padding: 18px;
+  background: white;
+  border-radius: 16px;
+  padding: 20px;
   text-align: center;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
 }
 
 .detail-box svg {
-  width: 24px;
-  height: 24px;
-  color: #2563eb;
-  margin: 0 auto 8px;
+  width: 28px;
+  height: 28px;
+  color: #667eea;
+  margin-bottom: 10px;
 }
 
 .detail-box p:first-of-type {
-  color: #4b5563;
+  color: #4a5568;
   font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  margin-bottom: 5px;
 }
 
 .detail-box p:last-of-type {
-  color: #1f2937;
+  color: #1a202c;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .action-buttons {
   display: flex;
-  gap: 12px;
-}
-
-.history-button,
-.reset-button {
-  flex: 1;
-  padding: 12px 24px;
-  border-radius: 12px;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s, transform 0.2s;
-  display: flex;
-  align-items: center;
+  gap: 15px;
   justify-content: center;
+  margin-bottom: 20px;
 }
 
-.history-button {
-  background: #7e22ce;
-  color: #ffffff;
+.action-button {
+  border-radius: 16px !important;
+  padding: 12px 24px !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  flex: 1;
+  max-width: 180px;
 }
 
-.history-button:hover {
-  background: #6b21a8;
-  transform: scale(1.05);
-}
-
-.reset-button {
-  background: #4b5563;
-  color: #ffffff;
-}
-
-.reset-button:hover {
-  background: #374151;
-  transform: scale(1.05);
-}
-
-.action-buttons svg {
-  width: 20px;
-  height: 20px;
-  margin-right: 8px;
+.history-section {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 30px;
+  margin-top: 20px;
 }
 
 .history-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 24px;
+  margin-bottom: 25px;
 }
 
-.history-header h2 {
-  font-size: 24px;
-  font-weight: bold;
-  color: #1f2937;
+.history-header h3 {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1a202c;
 }
 
-.refresh-button {
-  color: #4b5563;
+.close-history-button {
+  background: none;
+  border: none;
+  color: #4a5568;
   padding: 8px;
   border-radius: 8px;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: all 0.2s;
+}
+
+.close-history-button:hover {
+  background: #f7fafc;
+  color: #1a202c;
+}
+
+.close-history-button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.refresh-button {
+  background: none;
+  border: none;
+  color: #4a5568;
+  padding: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
 }
 
 .refresh-button:hover {
-  color: #1f2937;
-  background: #f3f4f6;
+  background: #f7fafc;
+  color: #1a202c;
 }
 
 .refresh-button svg {
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
 }
 
 .history-list {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 5px;
 }
 
 .history-item {
-  background: #f9fafb;
-  border-radius: 12px;
-  padding: 18px;
-  transition: all 0.2s ease-in-out;
+  background: white;
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 15px;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  border: 1px solid #e5e7eb;
+  justify-content: space-between;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+  transition: transform 0.2s, box-shadow 0.2s;
 }
 
 .history-item:hover {
-  background: #f3f4f6;
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+}
+
+.history-item:last-child {
+  margin-bottom: 0;
 }
 
 .history-details {
   display: flex;
   align-items: center;
-  flex-grow: 1;
+  flex: 1;
 }
 
 .history-icon {
-  width: 40px;
-  height: 40px;
-  background: #dbeafe;
-  border-radius: 50%;
+  width: 45px;
+  height: 45px;
+  background: #e6f3ff;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-right: 12px;
+  margin-right: 15px;
 }
 
 .history-icon svg {
   width: 20px;
   height: 20px;
-  color: #2563eb;
+  color: #667eea;
 }
 
-.history-details p:first-child {
+.history-info {
+  flex: 1;
+}
+
+.history-date {
   font-size: 16px;
   font-weight: 600;
-  color: #1f2937;
+  color: #1a202c;
   margin-bottom: 4px;
 }
 
-.history-details p:last-child {
-  font-size: 13px;
-  color: #6b7280;
+.history-time {
+  font-size: 14px;
+  color: #4a5568;
+  margin: 0;
 }
 
 .badge {
-  padding: 4px 12px;
-  border-radius: 9999px;
+  padding: 6px 12px;
+  border-radius: 20px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .badge-present {
-  background: #dcfce7;
-  color: #16a34a;
+  background: #f0fff4;
+  color: #38a169;
+  border: 1px solid #9ae6b4;
 }
 
 .badge-late {
-  background: #fef3c7;
-  color: #d97706;
+  background: #fffbeb;
+  color: #d69e2e;
+  border: 1px solid #fbd38d;
 }
 
 .badge-absent {
-  background: #fee2e2;
-  color: #dc2626;
+  background: #fed7d7;
+  color: #e53e3e;
+  border: 1px solid #fbb6ce;
 }
 
 .badge-default {
-  background: #f3f4f6;
-  color: #4b5563;
+  background: #f7fafc;
+  color: #4a5568;
+  border: 1px solid #e2e8f0;
 }
 
 .history-footer {
-  margin-top: 24px;
+  margin-top: 30px;
   text-align: center;
+  padding-top: 20px;
+  border-top: 1px solid #e2e8f0;
 }
 
 .back-button {
-  background: #2563eb;
-  color: #ffffff;
-  padding: 12px 32px;
-  border-radius: 12px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  border: none;
+  border-radius: 16px;
+  padding: 12px 30px;
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s, transform 0.2s;
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .back-button:hover {
-  background: #1d4ed8;
-  transform: scale(1.05);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
 }
 
 .footer {
   text-align: center;
-  margin-top: 32px;
+  margin-top: 30px;
+  padding: 20px;
 }
 
 .footer p {
-  color: rgba(147, 197, 255, 0.8);
-  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+  margin: 0;
 }
 
+/* Responsive Design */
+@media (max-width: 768px) {
+  .container {
+    padding: 15px;
+  }
+  
+  .main-content-wrapper {
+    padding: 0 12px;
+  }
+  
+  .header-title {
+    font-size: 28px;
+  }
+  
+  .header-subtitle {
+    font-size: 14px;
+  }
+  
+  .section {
+    padding: 25px 20px;
+  }
+  
+  .camera-section h2 {
+    font-size: 22px;
+  }
+  
+  .video-frame {
+    aspect-ratio: 4/3;
+  }
+  
+  .employee-info {
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  .employee-avatar {
+    margin-right: 0;
+    margin-bottom: 15px;
+  }
+  
+  .employee-details {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  .action-buttons {
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .action-button {
+    max-width: none;
+  }
+  
+  .history-item {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 15px;
+  }
+  
+  .history-details {
+    width: 100%;
+    margin-bottom: 10px;
+  }
+  
+  .badge {
+    align-self: flex-end;
+  }
+}
+
+@media (max-width: 480px) {
+  .container {
+    padding: 10px;
+  }
+  
+  .header-icon {
+    width: 60px;
+    height: 60px;
+  }
+  
+  .header-icon svg {
+    width: 30px;
+    height: 30px;
+  }
+  
+  .header-title {
+    font-size: 24px;
+  }
+  
+  .section {
+    padding: 20px 16px;
+  }
+  
+  .camera-section svg {
+    width: 40px;
+    height: 40px;
+  }
+  
+  .camera-section h2 {
+    font-size: 20px;
+  }
+  
+  .employee-avatar {
+    width: 70px;
+    height: 70px;
+    font-size: 24px;
+  }
+  
+  .processing-icon {
+    width: 80px;
+    height: 80px;
+  }
+  
+  .processing-icon svg {
+    width: 40px;
+    height: 40px;
+  }
+  
+  .success-icon {
+    width: 75px;
+    height: 75px;
+  }
+  
+  .success-icon svg {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.section {
+  animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.history-item {
+  animation: slideIn 0.3s ease-out;
+}
+
+.history-item:nth-child(1) { animation-delay: 0.1s; }
+.history-item:nth-child(2) { animation-delay: 0.2s; }
+.history-item:nth-child(3) { animation-delay: 0.3s; }
+.history-item:nth-child(4) { animation-delay: 0.4s; }
+.history-item:nth-child(5) { animation-delay: 0.5s; }
+
+/* Scrollbar Styling */
+.history-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.history-list::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+.history-list::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 10px;
+}
+
+.history-list::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Focus States for Accessibility */
+.control-button:focus,
+.action-button:focus,
+.back-button:focus,
+.close-history-button:focus,
+.refresh-button:focus {
+  outline: 2px solid #667eea;
+  outline-offset: 2px;
+}
+
+/* Loading States */
 .animate-spin {
   animation: spin 1s linear infinite;
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
-@media (max-width: 768px) {
-  .section {
-    padding: 16px 8px;
+
+/* High Contrast Mode Support */
+@media (prefers-contrast: high) {
+  .card {
+    background: white;
+    border: 2px solid #000;
+  }
+  
+  .employee-card {
+    background: #f0f0f0;
+    border: 1px solid #333;
+  }
+  
+  .history-item {
+    background: white;
+    border: 1px solid #333;
+  }
+}
+
+/* Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  
+  .animate-spin {
+    animation: none;
+  }
+  
+  .background-decoration-top,
+  .background-decoration-bottom {
+    animation: none;
   }
 }
 </style>
