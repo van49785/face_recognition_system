@@ -2,20 +2,20 @@
 <template>
   <div class="employee-management-content">
     <div class="d-flex align-center justify-space-between mb-4">
-      <h2 class="employee-panel-title">Quản lý Nhân viên</h2>
+      <h2 class="employee-panel-title">Employee Management</h2>
       <v-btn
         color="primary"
         prepend-icon="mdi-plus-circle"
         @click="openAddEmployeeDialog"
       >
-        Thêm Nhân viên mới
+        Add New Employee
       </v-btn>
     </div>
 
     <v-card class="elevation-4 pa-4 rounded-lg">
       <v-text-field
         v-model="searchQuery"
-        label="Tìm kiếm theo ID, Tên, Email hoặc Phòng ban"
+        label="Search by ID, Name, Email, or Department"
         prepend-inner-icon="mdi-magnify"
         variant="outlined"
         clearable
@@ -52,7 +52,7 @@
             density="compact"
             label
           >
-            {{ (item.raw || item).status ? 'Đang hoạt động' : 'Đã xóa mềm' }}
+            {{ (item.raw || item).status ? 'Active' : 'Deleted' }}
           </v-chip>
         </template>
 
@@ -64,7 +64,7 @@
               variant="text"
               color="blue-darken-2"
               @click="openEditEmployeeDialog(item.raw || item)"
-              title="Sửa thông tin"
+              title="Edit Info"
             ></v-btn>
             <v-btn
               v-if="(item.raw || item).status"
@@ -73,7 +73,7 @@
               variant="text"
               color="red-darken-2"
               @click="confirmSoftDelete(item.raw || item)"
-              title="Xóa mềm nhân viên"
+              title="Delete Employee"
             ></v-btn>
             <v-btn
               v-else
@@ -82,7 +82,7 @@
               variant="text"
               color="orange-darken-2"
               @click="confirmRestoreEmployee(item.raw || item)"
-              title="Khôi phục nhân viên"
+              title="Restore Employee"
             ></v-btn>
           </div>
         </template>
@@ -95,7 +95,7 @@
             density="compact"
             icon="mdi-information-outline"
           >
-            Không có dữ liệu nhân viên nào được tìm thấy.
+            No employee data found
           </v-alert>
         </template>
       </v-data-table-server>
@@ -104,17 +104,17 @@
     <v-dialog v-model="employeeDialog" max-width="800px">
       <v-card rounded="lg">
         <v-card-title class="headline text-h5 primary-title-dialog py-4">
-          {{ isEditing ? 'Chỉnh sửa Thông tin Nhân viên' : 'Thêm Nhân viên Mới' }}
+          {{ isEditing ? 'Edit Employee Information' : 'Add New Employee' }}
         </v-card-title>
         <v-card-text class="pt-4 pb-0">
           <p class="text-center text-medium-emphasis text-body-2">
-            Form thêm/sửa nhân viên sẽ được tạo ở đây. Sau khi tạo/sửa, sẽ có bước huấn luyện khuôn mặt.
+            The employee creation/edit form will be placed here...
           </p>
           <v-container>
             <v-row>
               <v-col cols="12" md="6">
                 <v-text-field
-                  label="Mã nhân viên (Employee ID)"
+                  label="Employee ID"
                   variant="outlined"
                   density="compact"
                   required
@@ -124,7 +124,7 @@
               </v-col>
               <v-col cols="12" md="6">
                 <v-text-field
-                  label="Họ và tên"
+                  label="Full Name"
                   variant="outlined"
                   density="compact"
                   required
@@ -141,7 +141,7 @@
               </v-col>
               <v-col cols="12" md="6">
                 <v-text-field
-                  label="Số điện thoại"
+                  label="Phone Number"
                   variant="outlined"
                   density="compact"
                   v-model="editedEmployee.phone"
@@ -149,7 +149,7 @@
               </v-col>
               <v-col cols="12" md="6">
                 <v-select
-                  label="Phòng ban"
+                  label="Department"
                   variant="outlined"
                   density="compact"
                   :items="['IT', 'HR', 'Marketing', 'Sales', 'Finance', 'Operations']"
@@ -158,7 +158,7 @@
               </v-col>
               <v-col cols="12" md="6">
                 <v-text-field
-                  label="Vị trí"
+                  label="Position"
                   variant="outlined"
                   density="compact"
                   v-model="editedEmployee.position"
@@ -168,7 +168,7 @@
                 <v-switch
                   v-model="editedEmployee.status"
                   color="primary"
-                  :label="editedEmployee.status ? 'Trạng thái: Đang hoạt động' : 'Trạng thái: Đã xóa mềm'"
+                  :label="editedEmployee.status ? 'Status: Active' : 'Status: Deleted'"
                   hide-details
                 ></v-switch>
               </v-col>
@@ -176,9 +176,9 @@
           </v-container>
         </v-card-text>
         <v-card-actions class="pa-4 pt-0 justify-end">
-          <v-btn color="grey-darken-2" variant="text" @click="closeEmployeeDialog">Hủy</v-btn>
+          <v-btn color="grey-darken-2" variant="text" @click="closeEmployeeDialog">Cancel</v-btn>
           <v-btn color="primary" variant="flat" @click="saveEmployee">
-            {{ isEditing ? 'Cập nhật' : 'Thêm mới' }}
+            {{ isEditing ? 'Update' : 'Add New' }}
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -187,27 +187,27 @@
     <v-dialog v-model="confirmDialog" max-width="500px">
       <v-card rounded="lg">
         <v-card-title class="headline text-h5 red-title-dialog py-4">
-          Xác nhận Hành động
+          Confirm Action
         </v-card-title>
         <v-card-text class="py-4">
           <v-icon size="48" color="warning" class="float-start me-3">mdi-alert-circle-outline</v-icon>
           <span v-if="actionType === 'delete'">
-            Bạn có chắc chắn muốn **xóa mềm** nhân viên **{{ selectedEmployee?.full_name }}** (ID: {{ selectedEmployee?.employee_id }}) không?
-            Nhân viên này sẽ không thể chấm công. Bạn có thể khôi phục sau.
+            Are you sure want to delete employee {{ selectedEmployee?.full_name }} (ID: {{ selectedEmployee?.employee_id }})?
+            This employee will no longer be able to check in. You can restore them later.
           </span>
           <span v-else-if="actionType === 'restore'">
-            Bạn có chắc chắn muốn **khôi phục** nhân viên **{{ selectedEmployee?.full_name }}** (ID: {{ selectedEmployee?.employee_id }}) không?
+            Are you sure want to restore employee {{ selectedEmployee?.full_name }} (ID: {{ selectedEmployee?.employee_id }})?
           </span>
-          <span v-else>Bạn có chắc chắn muốn thực hiện hành động này không?</span>
+          <span v-else>Are you sure you want to perform this action?</span>
         </v-card-text>
         <v-card-actions class="pa-4 pt-0 justify-end">
-          <v-btn color="grey-darken-2" variant="text" @click="confirmDialog = false">Hủy</v-btn>
+          <v-btn color="grey-darken-2" variant="text" @click="confirmDialog = false">Cancel</v-btn>
           <v-btn
             :color="actionType === 'delete' ? 'red-darken-2' : 'primary'"
             variant="flat"
             @click="executeConfirmedAction"
           >
-            {{ actionType === 'delete' ? 'Xóa mềm' : 'Khôi phục' }}
+            {{ actionType === 'delete' ? 'Delete' : 'Restore' }}
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -226,9 +226,10 @@
 </template>
 
 <script>
+import '@/assets/css/EmployeeManagementTab.css';
 import { defineComponent, ref, onMounted, watch } from 'vue';
 import { getEmployees, deleteEmployee, restoreEmployee, addEmployee, updateEmployee } from '../services/api';
-import defaultAvatar from '../assets/user_placeholder.png';
+import defaultAvatar from '../assets/image/user_placeholder.png';
 
 export default defineComponent({
   name: 'EmployeeManagementTab',
@@ -270,11 +271,11 @@ export default defineComponent({
 
     const headers = ref([
       { title: 'ID', key: 'employee_id', sortable: true },
-      { title: 'Họ và tên', key: 'full_name', sortable: true },
-      { title: 'Phòng ban', key: 'department', sortable: true },
+      { title: 'Full Name', key: 'full_name', sortable: true },
+      { title: 'Department', key: 'department', sortable: true },
       { title: 'Email', key: 'email', sortable: true },
-      { title: 'Trạng thái', key: 'status', sortable: true },
-      { title: 'Hành động', key: 'actions', sortable: false, align: 'center' },
+      { title: 'Ststus', key: 'status', sortable: true },
+      { title: 'Actions', key: 'actions', sortable: false, align: 'center' },
     ]);
 
     const fetchEmployees = async () => {
@@ -302,7 +303,7 @@ export default defineComponent({
 
       } catch (error) {
         console.error('Error fetching employees:', error);
-        showSnackbar('Lỗi khi tải danh sách nhân viên.', 'error');
+        showSnackbar('An error occurred while loading the employee list.', 'error');
         employees.value = [];
         totalEmployees.value = 0;
       } finally {
@@ -343,7 +344,7 @@ export default defineComponent({
 
     const saveEmployee = async () => {
       if (!editedEmployee.value.employee_id || !editedEmployee.value.full_name || !editedEmployee.value.department) {
-        showSnackbar('Vui lòng điền đầy đủ các trường bắt buộc (Mã NV, Họ tên, Phòng ban).', 'warning');
+        showSnackbar('Please fill in all required fields (Employee ID, Full Name, Department).', 'warning');
         return;
       }
 
@@ -359,16 +360,16 @@ export default defineComponent({
 
         if (isEditing.value) {
           await updateEmployee(editedEmployee.value.employee_id, formData);
-          showSnackbar('Cập nhật nhân viên thành công!', 'success');
+          showSnackbar('Employee Updated Successfully!', 'success');
         } else {
           await addEmployee(formData);
-          showSnackbar('Thêm nhân viên thành công! (Cần huấn luyện khuôn mặt)', 'success');
+          showSnackbar('New employee has been added successfully. (Facial recognition training is required)', 'success');
         }
         closeEmployeeDialog();
         fetchEmployees();
       } catch (error) {
         console.error('Error saving employee:', error);
-        showSnackbar(`Lỗi khi ${isEditing.value ? 'cập nhật' : 'thêm'} nhân viên: ${error.response?.data?.error || error.message}`, 'error');
+        showSnackbar(`Error when ${isEditing.value ? 'update' : 'add'} employee: ${error.response?.data?.error || error.message}`, 'error');
       }
     };
 
@@ -390,17 +391,17 @@ export default defineComponent({
       try {
         if (actionType.value === 'delete') {
           await deleteEmployee(selectedEmployee.value.employee_id);
-          showSnackbar(`Đã xóa mềm nhân viên ${selectedEmployee.value.full_name}.`, 'success');
+          showSnackbar(`Employee deleted ${selectedEmployee.value.full_name}.`, 'success');
         } else if (actionType.value === 'restore') {
           await restoreEmployee(selectedEmployee.value.employee_id);
-          showSnackbar(`Đã khôi phục nhân viên ${selectedEmployee.value.full_name}.`, 'success');
+          showSnackbar(`Employee restored ${selectedEmployee.value.full_name}.`, 'success');
         }
         confirmDialog.value = false;
         selectedEmployee.value = null;
         fetchEmployees();
       } catch (error) {
         console.error(`Error ${actionType.value}ing employee:`, error);
-        showSnackbar(`Lỗi khi ${actionType.value === 'delete' ? 'xóa mềm' : 'khôi phục'} nhân viên: ${error.response?.data?.error || error.message}`, 'error');
+        showSnackbar(`Error when ${actionType.value === 'delete' ? 'deleted' : 'restore'} employee: ${error.response?.data?.error || error.message}`, 'error');
       }
     };
 

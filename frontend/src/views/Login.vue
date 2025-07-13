@@ -101,11 +101,11 @@
                 size="large"
                 class="facial-recognition-btn"
                 rounded="lg"
-                @click="handleFaceRecognition"
+                @click="goToAttendancePage"
                 :disabled="loading"
               >
                 <v-icon left class="mr-2">mdi-camera</v-icon>
-                Use Facial Recognition
+                Go to Attendance
               </v-btn>
             </div>
           </v-form>
@@ -123,6 +123,7 @@
 </template>
 
 <script setup>
+import '@/assets/css/Login.css';
 import { ref, reactive, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { login, verify, recognizeFace } from '../services/api'
@@ -262,204 +263,7 @@ const handleLogin = async () => {
   }
 }
 
+const goToAttendancePage = () => {
+  router.push('/attendance')
+}
 </script>
-
-<style scoped>
-.login-wrapper {
-  position: fixed !important;
-  top: 0 !important;
-  left: 0 !important;
-  right: 0 !important;
-  bottom: 0 !important;
-  width: 100vw !important;
-  height: 100vh !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  overflow: hidden;
-  z-index: 1000;
-}
-
-.login-container {
-  position: absolute !important;
-  top: 50% !important;
-  left: 50% !important;
-  transform: translate(-50%, -50%) !important;
-  width: 90% !important;
-  max-width: 480px !important;
-  min-width: 380px !important;
-  margin: 0 !important;
-  padding: 0 !important;
-}
-
-.login-card {
-  width: 100% !important;
-  margin: 0 !important;
-  background: rgba(255, 255, 255, 0.95) !important;
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 
-    0 25px 50px -12px rgba(0, 0, 0, 0.25),
-    0 0 0 1px rgba(255, 255, 255, 0.1) !important;
-}
-
-.login-header {
-  padding: 40px 40px 20px 40px;
-  text-align: center;
-  background: linear-gradient(135deg, rgba(25, 118, 210, 0.1), rgba(25, 118, 210, 0.05));
-  border-radius: 12px 12px 0 0;
-}
-
-.logo-section {
-  animation: fadeInUp 0.8s ease-out;
-}
-
-.login-form-section {
-  padding: 30px 40px !important;
-}
-
-.form-group {
-  margin-bottom: 8px;
-}
-
-.login-btn {
-  font-weight: 600 !important;
-  text-transform: none !important;
-  letter-spacing: 0.5px !important;
-  transition: all 0.3s ease !important;
-}
-
-.login-btn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(25, 118, 210, 0.3);
-}
-
-.login-options {
-  margin-top: 20px;
-}
-
-.divider-section {
-  display: flex;
-  align-items: center;
-  margin: 20px 0;
-}
-
-.divider {
-  flex: 1;
-  height: 1px;
-  background: #e0e0e0;
-  border: none;
-}
-
-.divider-text {
-  padding: 0 15px;
-  color: #9e9e9e;
-  font-size: 14px;
-}
-
-.facial-recognition-btn {
-  font-weight: 500 !important;
-  text-transform: none !important;
-  transition: all 0.3s ease !important;
-}
-
-.facial-recognition-btn:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
-}
-
-.login-footer {
-  padding: 20px 40px;
-  text-align: center;
-  background: rgba(0, 0, 0, 0.02);
-  border-radius: 0 0 12px 12px;
-}
-
-
-/* Background decorations */
-.bg-decoration-1 {
-  position: absolute;
-  top: -50px;
-  right: -50px;
-  width: 200px;
-  height: 200px;
-  background: linear-gradient(45deg, rgba(255, 255, 255, 0.1), transparent);
-  border-radius: 50%;
-  animation: float 6s ease-in-out infinite;
-}
-
-.bg-decoration-2 {
-  position: absolute;
-  bottom: -100px;
-  left: -100px;
-  width: 300px;
-  height: 300px;
-  background: linear-gradient(45deg, rgba(255, 255, 255, 0.05), transparent);
-  border-radius: 50%;
-  animation: float 8s ease-in-out infinite reverse;
-}
-
-/* Animations */
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes float {
-  0%, 100% {
-    transform: translateY(0px);
-  }
-  50% {
-    transform: translateY(-20px);
-  }
-}
-
-/* Responsive */
-@media (max-width: 600px) {
-  .login-container {
-    width: 95% !important;
-    min-width: 300px !important;
-  }
-  
-  .login-header {
-    padding: 30px 20px 15px 20px;
-  }
-  
-  .login-form-section {
-    padding: 20px 20px !important;
-  }
-  
-  .login-footer {
-    padding: 15px 20px;
-  }
-}
-
-@media (max-width: 400px) {
-  .login-container {
-    width: 98% !important;
-    min-width: 280px !important;
-  }
-}
-</style>
-
-<!-- CSS global để override #app styles cho trang login -->
-<style>
-.login-page #app {
-  max-width: none !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  display: block !important;
-  grid-template-columns: none !important;
-}
-
-/* Override Vuetify default styles */
-.login-page .v-application {
-  background: transparent !important;
-}
-</style>
