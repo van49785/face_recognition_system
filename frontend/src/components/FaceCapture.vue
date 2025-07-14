@@ -1,3 +1,5 @@
+<!-- src/components/FaceCapture.vue -->
+
 <template>
   <div class="face-capture-overlay">
     <div class="face-capture-container">

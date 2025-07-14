@@ -1,4 +1,3 @@
-<!-- src/components/EmployeeManagementTab.vue -->
 <template>
   <div class="employee-management-content">
     <div class="d-flex align-center justify-space-between mb-4">
@@ -104,11 +103,14 @@
     <v-dialog v-model="employeeDialog" max-width="800px">
       <v-card rounded="lg">
         <v-card-title class="headline text-h5 primary-title-dialog py-4">
-          {{ isEditing ? 'Edit Employee Information' : 'Add New Employee' }}
+          {{ isEditing ? 'Edit Employee Information' : (newlyAddedEmployeeId ? 'Finalize Employee Addition' : 'Add New Employee') }}
         </v-card-title>
         <v-card-text class="pt-4 pb-0">
-          <p class="text-center text-medium-emphasis text-body-2">
-            The employee creation/edit form will be placed here...
+          <p class="text-center text-medium-emphasis text-body-2" v-if="!newlyAddedEmployeeId">
+            Please fill in the employee's basic information.
+          </p>
+          <p class="text-center text-medium-emphasis text-body-2" v-else>
+            Employee basic information saved. Now, collect face data.
           </p>
           <v-container>
             <v-row>
@@ -118,7 +120,7 @@
                   variant="outlined"
                   density="compact"
                   required
-                  :readonly="isEditing"
+                  :readonly="isEditing || newlyAddedEmployeeId"
                   v-model="editedEmployee.employee_id"
                 ></v-text-field>
               </v-col>
@@ -128,6 +130,7 @@
                   variant="outlined"
                   density="compact"
                   required
+                  :readonly="newlyAddedEmployeeId"
                   v-model="editedEmployee.full_name"
                 ></v-text-field>
               </v-col>
@@ -136,6 +139,7 @@
                   label="Email"
                   variant="outlined"
                   density="compact"
+                  :readonly="newlyAddedEmployeeId"
                   v-model="editedEmployee.email"
                 ></v-text-field>
               </v-col>
@@ -144,6 +148,7 @@
                   label="Phone Number"
                   variant="outlined"
                   density="compact"
+                  :readonly="newlyAddedEmployeeId"
                   v-model="editedEmployee.phone"
                 ></v-text-field>
               </v-col>
@@ -153,6 +158,7 @@
                   variant="outlined"
                   density="compact"
                   :items="['IT', 'HR', 'Marketing', 'Sales', 'Finance', 'Operations']"
+                  :readonly="newlyAddedEmployeeId"
                   v-model="editedEmployee.department"
                 ></v-select>
               </v-col>
@@ -161,6 +167,7 @@
                   label="Position"
                   variant="outlined"
                   density="compact"
+                  :readonly="newlyAddedEmployeeId"
                   v-model="editedEmployee.position"
                 ></v-text-field>
               </v-col>
@@ -177,17 +184,25 @@
         </v-card-text>
         <v-card-actions class="pa-4 pt-0 justify-end">
           <v-btn color="grey-darken-2" variant="text" @click="closeEmployeeDialog">Cancel</v-btn>
-          <v-btn color="primary" variant="flat" @click="saveEmployee">
-            {{ isEditing ? 'Update' : 'Add New' }}
+          <v-btn
+            color="primary"
+            variant="flat"
+            @click="saveEmployee"
+            :disabled="loading"
+          >
+            <span v-if="isEditing">Update</span>
+            <span v-else-if="newlyAddedEmployeeId">Add New Employee</span>
+            <span v-else>Save & Collect Face Data</span>
           </v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
 
     <FaceCapture
-      v-if="newlyAddedEmployeeId && !isEditing"
+      v-if="showFaceCaptureDialog && newlyAddedEmployeeId"
       :userId="newlyAddedEmployeeId"
-      @completed="onFaceCaptureDone"
+      @completed="onFaceCaptureCompleted"
+      @cancelled="onFaceCaptureCancelled"
     />
 
     <v-dialog v-model="confirmDialog" max-width="500px">
@@ -267,11 +282,21 @@ export default defineComponent({
       { title: 'Full Name', key: 'full_name' },
       { title: 'Department', key: 'department' },
       { title: 'Email', key: 'email' },
-      { title: 'Ststus', key: 'status' },
+      { title: 'Status', key: 'status' },
       { title: 'Actions', key: 'actions', sortable: false, align: 'center' },
     ]);
 
     const newlyAddedEmployeeId = ref(null);
+    const showFaceCaptureDialog = ref(false); // New state for FaceCapture dialog
+
+    // Debounce search input
+    let searchTimeout = null;
+    const debouncedSearch = () => {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(() => {
+        fetchEmployees();
+      }, 500); // 500ms delay
+    };
 
     const fetchEmployees = async () => {
       loading.value = true;
@@ -301,12 +326,14 @@ export default defineComponent({
 
     const openAddEmployeeDialog = () => {
       isEditing.value = false;
+      newlyAddedEmployeeId.value = null; // Reset for new addition
       editedEmployee.value = { ...defaultEmployee };
       employeeDialog.value = true;
     };
 
     const openEditEmployeeDialog = (emp) => {
       isEditing.value = true;
+      newlyAddedEmployeeId.value = null; // Ensure this is null for editing
       editedEmployee.value = { ...emp };
       employeeDialog.value = true;
     };
@@ -314,12 +341,16 @@ export default defineComponent({
     const closeEmployeeDialog = () => {
       employeeDialog.value = false;
       editedEmployee.value = {};
+      newlyAddedEmployeeId.value = null; // Also reset if dialog is closed
     };
 
     const saveEmployee = async () => {
       if (!editedEmployee.value.employee_id || !editedEmployee.value.full_name || !editedEmployee.value.department) {
         return showSnackbar('Missing required fields', 'warning');
       }
+
+      loading.value = true; // Set loading state for the button
+
       try {
         const formData = new FormData();
         Object.keys(editedEmployee.value).forEach(key => {
@@ -329,23 +360,58 @@ export default defineComponent({
         });
 
         if (isEditing.value) {
+          // This path is for editing existing employee data
           await updateEmployee(editedEmployee.value.employee_id, formData);
           showSnackbar('Employee updated', 'success');
-        } else {
+          closeEmployeeDialog();
+          fetchEmployees();
+        } else if (newlyAddedEmployeeId.value) {
+          // This path is for finalizing the addition after face capture
+          // The employee object already exists in the backend from the first step
+          // We just need to close the dialog and refresh the list.
+          // In a real scenario, you might have a separate API call here
+          // to update the employee status to 'active' or similar after face data.
+          // For now, we assume the employee is ready after face capture.
+          showSnackbar('New employee added successfully!', 'success');
+          closeEmployeeDialog();
+          fetchEmployees();
+        }
+        else {
+          // This path is for initially saving basic employee data before face capture
           const res = await addEmployee(formData);
           newlyAddedEmployeeId.value = res.employee_id || res.id || editedEmployee.value.employee_id;
-          showSnackbar('Employee added, please train face data.', 'success');
+          
+          if (newlyAddedEmployeeId.value) {
+            showSnackbar('Employee basic info saved. Now, collecting face data.', 'info');
+            // Close the current dialog and open FaceCapture
+            employeeDialog.value = false; 
+            showFaceCaptureDialog.value = true; // Show face capture dialog
+          } else {
+            throw new Error('Failed to get employee ID after saving basic info.');
+          }
         }
-        closeEmployeeDialog();
-        fetchEmployees();
       } catch (error) {
         showSnackbar('Error saving employee: ' + (error.message || 'Unknown'), 'error');
+      } finally {
+        loading.value = false; // Reset loading state
       }
     };
 
-    const onFaceCaptureDone = () => {
-      showSnackbar('✅ Khuôn mặt đã được thu thập!', 'success');
-      newlyAddedEmployeeId.value = null;
+    const onFaceCaptureCompleted = () => {
+      showSnackbar('✅ Face data collected successfully!', 'success');
+      showFaceCaptureDialog.value = false; // Hide face capture dialog
+      // Re-open the employee dialog to finalize the addition
+      // We pass the editedEmployee value so the ID is pre-filled
+      employeeDialog.value = true; 
+    };
+
+    const onFaceCaptureCancelled = () => {
+      showSnackbar('Face data collection cancelled. Employee not fully added.', 'warning');
+      showFaceCaptureDialog.value = false; // Hide face capture dialog
+      newlyAddedEmployeeId.value = null; // Clear the ID as the process was cancelled
+      // You might want to delete the partially added employee from the backend here
+      // or mark it as 'pending' with an incomplete status.
+      closeEmployeeDialog(); // Close the initial employee dialog as well
     };
 
     const confirmSoftDelete = (e) => { selectedEmployee.value = e; actionType.value = 'delete'; confirmDialog.value = true; };
@@ -369,14 +435,15 @@ export default defineComponent({
     };
 
     onMounted(fetchEmployees);
+
     return {
       employees, totalEmployees, loading, searchQuery, options,
       employeeDialog, isEditing, editedEmployee, headers,
       openAddEmployeeDialog, openEditEmployeeDialog, closeEmployeeDialog, saveEmployee,
       confirmDialog, selectedEmployee, actionType,
       confirmSoftDelete, confirmRestoreEmployee, executeConfirmedAction,
-      snackbar, showSnackbar, updateOptions,
-      newlyAddedEmployeeId, onFaceCaptureDone,
+      snackbar, showSnackbar, updateOptions, debouncedSearch,
+      newlyAddedEmployeeId, showFaceCaptureDialog, onFaceCaptureCompleted, onFaceCaptureCancelled,
       defaultAvatar
     };
   }
