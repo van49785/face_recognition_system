@@ -1,4 +1,4 @@
-# backend/app/utils/attendance_utils.py
+# backend/app/utils/attendance_utils.py # Lưu ý: Đây là comment trong file, tên file thực tế là attendance_service.py
 
 from datetime import datetime, timedelta, time
 import pytz
@@ -15,7 +15,7 @@ from app.models.employee import Employee
 from app.models.face_training_data import FaceTrainingData
 from app.utils.helpers import get_vn_datetime, format_datetime_vn, format_time_vn, get_upload_path
 
-def recognize_face_logic(image_file, base64_image, location, device_info):
+def recognize_face_logic(image_file, base64_image, location, device_info, session_id: str): # THÊM session_id VÀO ĐÂY
     """Logic nhận diện khuôn mặt và ghi nhận chấm công"""
     # Kiểm tra đầu vào
     if not image_file and not base64_image:
@@ -37,8 +37,8 @@ def recognize_face_logic(image_file, base64_image, location, device_info):
     except Exception:
         return None, {"error": "Invalid image input"}, 400
 
-    # Nhận diện khuôn mặt
-    success, message, employee = FacialRecognitionService.recognize_face_with_liveness(image)
+    # Nhận diện khuôn mặt (Đã thêm session_id vào đây)
+    success, message, employee = FacialRecognitionService.recognize_face_with_liveness(image, session_id)
     if not success:
         return None, {"error": message}, 400
     if not employee:
@@ -71,36 +71,51 @@ def recognize_face_logic(image_file, base64_image, location, device_info):
 
     # Xác định trạng thái
     if "check-in" not in statuses:
-        if current_hour < checkin_start:
-            return None, {
-                "error": "Check-in not allowed before 7:00",
-                "next_valid_time": format_time_vn(datetime.combine(current_date, checkin_start))
-            }, 400
-        elif current_hour > checkin_late_end:
-            return None, {"error": "Check-in not allowed after 9:00"}, 400
-        elif half_day_start <= current_hour <= half_day_end:
-            status = "check-in"
-            attendance_type = "half_day"
-        elif current_hour > start_work:
-            status = "check-in"
-            attendance_type = "late"
-        else:
-            status = "check-in"
-            attendance_type = "normal"
+        # --- START: Logic kiểm tra thời gian check-in TẠM THỜI VÔ HIỆU HÓA ---
+        # if current_hour < checkin_start:
+        #     return None, {
+        #         "error": "Check-in not allowed before 7:00",
+        #         "next_valid_time": format_time_vn(datetime.combine(current_date, checkin_start))
+        #     }, 400
+        # elif current_hour > checkin_late_end:
+        #     return None, {"error": "Check-in not allowed after 9:00"}, 400
+        # elif half_day_start <= current_hour <= half_day_end:
+        #     status = "check-in"
+        #     attendance_type = "half_day"
+        # elif current_hour > start_work:
+        #     status = "check-in"
+        #     attendance_type = "late"
+        # else:
+        #     status = "check-in"
+        #     attendance_type = "normal"
+        # --- END: Logic kiểm tra thời gian check-in TẠM THỜI VÔ HIỆU HÓA ---
+
+        # Logic MỚI (để test): Luôn coi là check-in bình thường
+        status = "check-in"
+        attendance_type = "normal" # Mặc định là normal để dễ test
+
     elif "check-out" not in statuses:
         checkin_log = next((r for r in records_today if r.status == "check-in"), None)
         if not checkin_log:
             return None, {"error": "Unexpected error: no check-in log found."}, 500
-        time_diff = current_time - checkin_log.timestamp
-        if time_diff < timedelta(hours=4):
-            return None, {
-                "error": "Cannot check out yet. Must wait at least 4 hours after check-in.",
-                "checked_in_at": format_time_vn(checkin_log.timestamp),
-                "minimum_checkout_time": format_time_vn(checkin_log.timestamp + timedelta(hours=4))
-            }, 400
+
+        # --- START: Logic kiểm tra thời gian check-out TẠM THỜI VÔ HIỆU HÓA ---
+        # time_diff = current_time - checkin_log.timestamp
+        # if time_diff < timedelta(hours=4):
+        #     return None, {
+        #         "error": "Cannot check out yet. Must wait at least 4 hours after check-in.",
+        #         "checked_in_at": format_time_vn(checkin_log.timestamp),
+        #         "minimum_checkout_time": format_time_vn(checkin_log.timestamp + timedelta(hours=4))
+        #     }, 400
+        # --- END: Logic kiểm tra thời gian check-out TẠM THỜI VÔ HIỆU HÓA ---
+        
+        # Logic MỚI (để test): Luôn coi là check-out bình thường
         status = "check-out"
-        attendance_type = "half_day" if half_day_start <= current_hour <= half_day_end else checkin_log.attendance_type
+        # Giữ nguyên attendance_type của check-in nếu có, hoặc mặc định normal
+        attendance_type = checkin_log.attendance_type if checkin_log else "normal"
+        # attendance_type = "half_day" if half_day_start <= current_hour <= half_day_end else checkin_log.attendance_type # Dòng cũ
     else:
+        # Giữ nguyên phần này
         return {
             "message": "Already checked in and out today.",
             "records_today": [

@@ -1,17 +1,19 @@
-"""FacialRecognitionService – revised
--------------------------------------------------
-• Uses dlib shape predictor (68 landmarks) for reliable liveness checks.
-• Handles both file uploads (bytes) and base64 strings.
-• Unified helper for extracting landmarks, no KeyError anymore.
-"""
+# FacialRecognitionService – revised
+# -------------------------------------------------
+# • Uses dlib shape predictor (68 landmarks) for reliable liveness checks.
+# • Handles both file uploads (bytes) and base64 strings.
+# • Unified helper for extracting landmarks, no KeyError anymore.
+# • NEW: Implements passive liveness detection over a sequence of frames.
 
 # === Standard library ===
 import os
 import math
 import random
 import base64
+import time # Thêm import time để quản lý thời gian phiên
 from io import BytesIO
 from PIL import Image
+from datetime import datetime, timedelta # Thêm timedelta để quản lý thời gian phiên
 
 # === Third‑party libs ===
 import cv2
@@ -56,9 +58,8 @@ def _extract_landmarks(image_bgr: np.ndarray):
 class LivenessChecker:
     def __init__(self):
         # self.actions = ["blink", "smile", "turn_left", "turn_right", "nod"]
-        self.actions = ['blink', 'smile']
+        self.actions = ['blink', 'smile'] # Vẫn giữ để sử dụng các hàm con
 
-    # ... (same functions detect_blink / detect_smile / detect_head_pose)
     def detect_blink(self, landmarks):
         def ear(eye):
             A = np.linalg.norm(eye[1] - eye[5])
@@ -88,6 +89,15 @@ class LivenessChecker:
         if abs(nose_tip[0] - face_center_x) < 5:
             return "nod"
         return "center"
+
+# --------------------------------------------------
+# Global Liveness Session Management
+# --------------------------------------------------
+# Lưu trữ trạng thái liveness cho mỗi phiên (session_id)
+# Mỗi phiên sẽ lưu trữ một số khung hình gần nhất và trạng thái liveness
+LIVENESS_SESSIONS = {}
+SESSION_TIMEOUT_SECONDS = 5 # Thời gian chờ tối đa cho một phiên liveness (ví dụ: 5 giây)
+MAX_FRAMES_PER_SESSION = 30 # Số lượng khung hình tối đa được lưu trữ cho mỗi phiên
 
 # --------------------------------------------------
 # FacialRecognitionService
@@ -139,38 +149,17 @@ class FacialRecognitionService:
         w,h = r-l, b-t
         ar = w / h if h > 0 else 1
         if ar > 1.2:
-            return "left",0.0
+            return "left",0
         if ar <0.8:
-            return "right",0.0
+            return "right",0
         if h> w*1.3:
-            return "up",0.0
+            return "up",0
         if h< w*0.7:
-            return "down",0.0
-        return "front",0.0
+            return "down",0
+        return "front",0
 
     # ---------- Encoding with metadata ----------
     @staticmethod
-<<<<<<< Updated upstream
-    def recognize_face_with_liveness(image_file):
-        '''
-        Nhận diện khuôn mặt với kiểm tra chống giả mạo
-        Đầu vào: ảnh numpy.ndarray đã được xử lý sẵn
-        Trả về: (bool, str, employee hoặc None)
-        '''
-
-        # Kiểm tra chống giả mạo (phân biệt ảnh thật/giả)
-        liveness_success, liveness_message = FacialRecognitionService.detect_liveness(processed_image)
-        if not liveness_success:
-            return False, liveness_message, None
-
-        # Tạo face encoding từ ảnh
-        face_encodings = face_recognition.face_encodings(processed_image)
-        if not face_encodings:
-            return False, "Failed to generate face encoding", None
-
-        # Truy vấn danh sách nhân viên đã đăng ký khuôn mặt
-        employees = Employee.query.all()
-=======
     def generate_face_encoding_with_metadata(file_like, pose_type=None):
         ok,msg,img = FacialRecognitionService.preprocess_image(file_like)
         if not ok:
@@ -184,40 +173,94 @@ class FacialRecognitionService:
             pose_type,_ = FacialRecognitionService.detect_face_pose(img, locs)
         return True,"Success",enc[0].tobytes(),{"pose_type":pose_type,"image_quality_score":quality}
 
-    # ---------- Liveness ----------
+    # ---------- Liveness (Enhanced for sequence analysis) ----------
     @staticmethod
-    def detect_liveness(img, required_action=None):
+    def detect_liveness(img, session_id: str):
+        # 1. Quản lý và dọn dẹp các phiên cũ
+        current_time = datetime.now()
+        for sid in list(LIVENESS_SESSIONS.keys()):
+            if (current_time - LIVENESS_SESSIONS[sid]['last_update']).total_seconds() > SESSION_TIMEOUT_SECONDS:
+                del LIVENESS_SESSIONS[sid]
+
+        # 2. Khởi tạo/Cập nhật phiên hiện tại
+        if session_id not in LIVENESS_SESSIONS:
+            LIVENESS_SESSIONS[session_id] = {
+                'frames_data': [], # Lưu trữ landmarks và timestamp
+                'liveness_passed': False,
+                'last_update': current_time,
+                'blink_detected_in_session': False,
+                'smile_detected_in_session': False
+            }
+
+        session_data = LIVENESS_SESSIONS[session_id]
+        session_data['last_update'] = current_time
+
+        # 3. Kiểm tra ánh sáng
         if np.std(cv2.cvtColor(img,cv2.COLOR_BGR2GRAY))<10:
-            return False,"Lighting too low"
+            # Nếu ánh sáng yếu, xóa phiên và báo lỗi
+            if session_id in LIVENESS_SESSIONS:
+                del LIVENESS_SESSIONS[session_id]
+            return False,"Ánh sáng quá yếu, vui lòng thử lại ở nơi sáng hơn."
+
+        # 4. Trích xuất landmarks và kiểm tra phát hiện khuôn mặt
         landmarks = _extract_landmarks(img)
         if landmarks is None:
-            return False,"Unable to detect a single face for liveness check"
-        if required_action is None:
-            required_action = random.choice(FacialRecognitionService.liveness_checker.actions)
-        checker = FacialRecognitionService.liveness_checker
-        if required_action=="blink":
-            if not checker.detect_blink(landmarks):
-                return False,"Please blink for liveness check"
-        elif required_action=="smile":
-            if not checker.detect_smile(landmarks):
-                return False,"Please smile for liveness check"
-        elif required_action in {"turn_left","turn_right","nod"}:
-            if checker.detect_head_pose(landmarks)!=required_action:
-                return False,f"Please {required_action.replace('_',' ')} for liveness check"
-        return True,f"Liveness passed ({required_action})"
+            return False,"Không thể phát hiện khuôn mặt, vui lòng nhìn thẳng vào camera."
+
+        # 5. Thêm dữ liệu khung hình hiện tại vào phiên
+        session_data['frames_data'].append({
+            'timestamp': current_time,
+            'landmarks': landmarks
+        })
+
+        # 6. Dọn dẹp khung hình cũ hơn 5 giây
+        session_data['frames_data'] = [
+            f_data for f_data in session_data['frames_data']
+            if (current_time - f_data['timestamp']).total_seconds() <= SESSION_TIMEOUT_SECONDS
+        ]
+
+        # Giới hạn số lượng khung hình để tránh tràn bộ nhớ
+        if len(session_data['frames_data']) > MAX_FRAMES_PER_SESSION:
+            session_data['frames_data'].pop(0)
+
+        # 7. Phân tích chuỗi khung hình để phát hiện liveness
+        # Chỉ cần một cái chớp mắt HOẶC một nụ cười
+        if not session_data['liveness_passed']:
+            checker = FacialRecognitionService.liveness_checker
+
+            for frame_data in session_data['frames_data']:
+                if not session_data['blink_detected_in_session'] and checker.detect_blink(frame_data['landmarks']):
+                    session_data['blink_detected_in_session'] = True
+                    break # Thoát vòng lặp nếu đã phát hiện
+
+            for frame_data in session_data['frames_data']:
+                if not session_data['smile_detected_in_session'] and checker.detect_smile(frame_data['landmarks']):
+                    session_data['smile_detected_in_session'] = True
+                    break # Thoát vòng lặp nếu đã phát hiện
+
+            # Quyết định liveness: đã phát hiện chớp mắt HOẶC cười
+            if session_data['blink_detected_in_session'] or session_data['smile_detected_in_session']:
+                session_data['liveness_passed'] = True
+                return True, "Kiểm tra sự sống thành công."
+            else:
+                # Nếu hết 5 giây mà không phát hiện, coi là thất bại
+                if (current_time - session_data['frames_data'][0]['timestamp']).total_seconds() > SESSION_TIMEOUT_SECONDS:
+                    del LIVENESS_SESSIONS[session_id] # Xóa phiên
+                    return False, "Không phát hiện hành động sự sống. Vui lòng thử lại và thực hiện chớp mắt hoặc cười."
+                return False, "Đang kiểm tra sự sống. Vui lòng giữ khuôn mặt rõ ràng và chớp mắt hoặc cười."
+        
+        # Nếu liveness đã được xác nhận trong phiên này
+        return True, "Kiểm tra sự sống thành công."
 
     # ---------- Recognition ----------
     @staticmethod
     def recognize_face_with_multiple_encodings(img):
-        live_ok, live_msg = FacialRecognitionService.detect_liveness(img)
-        if not live_ok:
-            return False, live_msg, None
+        # Hàm này vẫn giữ nguyên vì liveness đã được xử lý bởi recognize_face_with_liveness trước khi gọi nó
         enc = face_recognition.face_encodings(img)
         if not enc:
             return False,"Failed to generate encoding",None
         current = enc[0]
         employees = Employee.query.filter_by(status=True, face_training_completed=True).all()
->>>>>>> Stashed changes
         if not employees:
             return False,"No employees have completed face training yet",None
         best_dist,best_emp = float("inf"),None
@@ -231,32 +274,16 @@ class FacialRecognitionService:
                     best_dist,best_emp = dist,emp
         return (True,"Face recognized successfully",best_emp) if best_dist<0.5 else (False,"Face does not match any registered employee",None)
 
-<<<<<<< Updated upstream
-        best_match_distance = float('inf')
-        best_match_employee = None
-        face_encoding = face_encodings[0]
-
-        # So sánh encoding với từng nhân viên đã lưu
-        for employee in employees:
-            if employee.face_encoding:
-                stored_encoding = np.frombuffer(employee.face_encoding, dtype=np.float64)
-                distances = face_recognition.face_distance([stored_encoding], face_encoding)
-
-                if distances[0] < best_match_distance:
-                    best_match_distance = distances[0]
-                    best_match_employee = employee
-
-        if best_match_distance < 0.4:
-            return True, "Face recognized successfully", best_match_employee
-
-        return False, "Face does not match any registered employee", None
-=======
     @staticmethod
-    def recognize_face_with_liveness(img):
+    def recognize_face_with_liveness(img, session_id: str): # Bổ sung tham số session_id
+        live_ok, live_msg = FacialRecognitionService.detect_liveness(img, session_id)
+        if not live_ok:
+            return False, live_msg, None
+        
+        # Nếu liveness đã passed, tiếp tục nhận diện
         return FacialRecognitionService.recognize_face_with_multiple_encodings(img)
 
     # ---------- Misc ----------
     @staticmethod
     def get_required_poses():
         return ["front","left","right","up","down"]
->>>>>>> Stashed changes

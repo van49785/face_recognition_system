@@ -34,9 +34,23 @@ def add_employee():
 
 @employee_bp.route('/api/employees', methods=['GET'])
 def get_employees():
-    """Lấy danh sách nhân viên, có thể lọc theo trạng thái"""
+    """Lấy danh sách nhân viên với pagination và search"""
+    # Lấy parameters
     status_param = request.args.get('status')
-    result, error, status = get_employees_logic(status_param)
+    page = request.args.get('page', 1, type=int)
+    limit = request.args.get('limit', 10, type=int)
+    search = request.args.get('search', '')
+    sort_by = request.args.get('sort_by', 'created_at')
+    sort_order = request.args.get('sort_order', 'desc')
+    
+    result, error, status = get_employees_logic(
+        status_param=status_param,
+        page=page,
+        limit=limit,
+        search=search,
+        sort_by=sort_by,
+        sort_order=sort_order
+    )
     if error:
         return jsonify(error), status
     return jsonify(result), status

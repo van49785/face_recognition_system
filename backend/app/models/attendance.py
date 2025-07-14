@@ -22,8 +22,6 @@ class Attendance(db.Model):
                           default=lambda: datetime.now(pytz.timezone("Asia/Ho_Chi_Minh")).replace(tzinfo=None), 
                           nullable=False)  # Thời gian tạo bản ghi
     
-    # Relationship với Employee
-    employee = db.relationship('Employee', backref='attendance_records', lazy=True)
     
     def __init__(self, **kwargs):
         """Khởi tạo bản ghi với attendance_id và timestamp mặc định"""
