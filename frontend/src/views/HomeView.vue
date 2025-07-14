@@ -54,22 +54,22 @@
             </div>
 
             <div v-else-if="currentTab === 'attendance-history'" class="content-panel">
-              <h2 class="panel-title">Lịch sử Chấm công</h2>
+              <h2 class="panel-title">Attendance History</h2>
               <div class="panel-content">
                 <div class="placeholder-content">
                   <v-icon size="64" color="primary" class="placeholder-icon">mdi-calendar-clock</v-icon>
-                  <h3>Lịch sử Chấm công</h3>
+                  <h3>Attendance History</h3>
                   <p>Tính năng lịch sử chấm công và xuất Excel sẽ được triển khai tại đây</p>
                 </div>
               </div>
             </div>
 
             <div v-else-if="currentTab === 'audit-logs'" class="content-panel">
-              <h2 class="panel-title">Nhật ký Hoạt động</h2>
+              <h2 class="panel-title">Activity Log</h2>
               <div class="panel-content">
                 <div class="placeholder-content">
                   <v-icon size="64" color="primary" class="placeholder-icon">mdi-format-list-bulleted-square</v-icon>
-                  <h3>Nhật ký Hoạt động</h3>
+                  <h3>Activity Log</h3>
                   <p>Tính năng nhật ký hoạt động hệ thống sẽ được triển khai tại đây</p>
                 </div>
               </div>
@@ -80,7 +80,7 @@
               <div class="panel-content">
                 <div class="placeholder-content">
                   <v-icon size="64" color="primary" class="placeholder-icon">mdi-tools</v-icon>
-                  <h3>Cài đặt Hệ thống</h3>
+                  <h3>System Settings</h3>
                   <p>Tính năng cài đặt hệ thống sẽ được triển khai tại đây</p>
                 </div>
               </div>
@@ -93,6 +93,7 @@
 </template>
 
 <script>
+import '@/assets/css/Login.css';
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
@@ -112,22 +113,22 @@ export default {
     const tabs = [
       {
         value: 'employee-management',
-        label: 'Quản lý Nhân viên',
+        label: 'Employee Management',
         icon: 'mdi-account-group'
       },
       {
         value: 'attendance-history',
-        label: 'Lịch sử Chấm công',
+        label: 'Attendance History',
         icon: 'mdi-calendar-clock'
       },
       {
         value: 'audit-logs',
-        label: 'Nhật ký Hoạt động',
+        label: 'Activity Log',
         icon: 'mdi-format-list-bulleted-square'
       },
       {
         value: 'settings',
-        label: 'Cài đặt',
+        label: 'Settings',
         icon: 'mdi-tools'
       }
     ];

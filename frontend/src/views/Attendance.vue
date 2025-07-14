@@ -466,10 +466,10 @@ formatHistoryDate(dateString) {
         const base64Image = canvas.toDataURL('image/jpeg', 0.9).split(',')[1];
         const response = await recognizeFace({ base64_image: base64Image, session_id: this.sessionId });
 
-        console.log('🎯 Full API Response:', response);
+        console.log('Full API Response:', response);
 
         if (response.message === 'Attendance recorded successfully') {
-          console.log('🎯 Processing successful response...');
+          console.log('Processing successful response...');
           
           if (response.employee && response.employee.full_name) {
             this.employee = {
@@ -491,7 +491,7 @@ formatHistoryDate(dateString) {
             this.statusMessage = "Check-in Successful!";
             
           } else {
-            console.error('❌ No employee data in response:', response);
+            console.error('No employee data in response:', response);
             this.error = 'Recognition successful but employee data is missing';
             this.statusMessage = 'Recognition successful but employee data is missing';
             this.currentStep = 'camera';
@@ -509,7 +509,7 @@ formatHistoryDate(dateString) {
           this.isProcessing = false;
           
         } else {
-          console.log('🎯 Other response:', response.message);
+          console.log('Other response:', response.message);
           this.error = response.message || 'Face recognition failed. Please try again.';
           this.statusMessage = response.message || 'Face recognition failed. Please try again.';
           this.currentStep = 'camera';
@@ -517,7 +517,7 @@ formatHistoryDate(dateString) {
         }
         
       } catch (err) {
-        console.error('❌ Recognition error:', err);
+        console.error('Recognition error:', err);
         this.error = err.response?.data?.error || 'An unexpected error occurred during recognition. Please try again.';
         this.statusMessage = this.error;
         this.currentStep = 'camera';
@@ -528,7 +528,7 @@ formatHistoryDate(dateString) {
     async viewHistory() {
       try {
         if (!this.employee || !this.employee.employee_id) {
-          this.error = 'Không thể xem lịch sử: Không có thông tin nhân viên được nhận diện.';
+          this.error = 'Unable to view history: No employee information detected.';
           return;
         }
 

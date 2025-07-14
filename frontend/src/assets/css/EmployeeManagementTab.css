@@ -39,14 +39,14 @@
 }
 
 /* Table headers styling */
-.v-data-table-server .v-data-table-header th {
+:deep(.v-data-table-server .v-data-table-header th) {
   background-color: #f8fafc !important;
   font-weight: 600 !important;
   color: #334155 !important;
   font-size: 0.875rem !important;
 }
 
-.v-data-table-server .v-data-table__td {
+:deep(.v-data-table-server .v-data-table__td) {
   font-size: 0.9rem !important;
 }
 
@@ -55,17 +55,17 @@
   .employee-management-content {
     padding: 20px;
   }
-
+  
   .employee-panel-title {
     font-size: 20px;
   }
-
+  
   .d-flex.align-center.justify-space-between.mb-4 {
     flex-direction: column;
     align-items: flex-start !important;
     gap: 15px;
   }
-
+  
   .v-btn {
     width: 100%;
   }

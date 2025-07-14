@@ -204,7 +204,7 @@ const handleLogin = async () => {
     
     /* ❶ GỌI login API */
     const loginResponse = await login(form.username, form.password)
-    console.log('📝 Login response:', loginResponse)
+    console.log('Login response:', loginResponse)
     
     const { token, username, admin_id, employee_id } = loginResponse
     
@@ -215,13 +215,13 @@ const handleLogin = async () => {
       employee_id: employee_id || admin_id
     }
     
-    console.log('💾 Saving to store:', { token, userData })
+    console.log('Saving to store:', { token, userData })
     authStore.login(token, userData)
     
     /* ❸ CHỜ VÀ KIỂM TRA */
     await nextTick()
     
-    console.log('🔍 Verifying login state...')
+    console.log('Verifying login state...')
     console.log('  - Store token:', authStore.token)
     console.log('  - Store user:', authStore.user)
     console.log('  - localStorage token:', localStorage.getItem('token'))
@@ -230,9 +230,9 @@ const handleLogin = async () => {
     /* ❹ VERIFY (optional - để kiểm tra token có hợp lệ không) */
     try {
       await verify()
-      console.log('✅ Token verified successfully')
+      console.log('Token verified successfully')
     } catch (verifyError) {
-      console.warn('⚠️ Token verification failed:', verifyError.message)
+      console.warn('Token verification failed:', verifyError.message)
       // Nếu verify fail, vẫn có thể redirect nếu có token
       if (!authStore.token) {
         throw new Error('Login failed - no valid token')
@@ -243,7 +243,7 @@ const handleLogin = async () => {
     router.push('/')
     
   } catch (error) {
-    console.error('❌ Login error:', error)
+    console.error('Login error:', error)
     
     const msg = error.response?.data?.error ?? error.message ?? 'An error occurred during login'
     

@@ -29,8 +29,8 @@ def add_employee_logic(data, image_files):
         if not data.get(field):
             return None, {"error": f"Missing required field {field}"}, 400
 
-    if len(image_files) < 3:
-        return None, {"error": "At least 3 images are required for face training"}, 400
+    # if len(image_files) < 3:
+    #     return None, {"error": "At least 3 images are required for face training"}, 400
 
     employee_id = data['employee_id'].upper()
     if Employee.query.filter_by(employee_id=employee_id).first():

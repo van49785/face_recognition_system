@@ -103,14 +103,11 @@
     <v-dialog v-model="employeeDialog" max-width="800px">
       <v-card rounded="lg">
         <v-card-title class="headline text-h5 primary-title-dialog py-4">
-          {{ isEditing ? 'Edit Employee Information' : (newlyAddedEmployeeId ? 'Finalize Employee Addition' : 'Add New Employee') }}
+          {{ isEditing ? 'Edit Employee Information' : 'Add New Employee' }}
         </v-card-title>
         <v-card-text class="pt-4 pb-0">
-          <p class="text-center text-medium-emphasis text-body-2" v-if="!newlyAddedEmployeeId">
-            Please fill in the employee's basic information.
-          </p>
-          <p class="text-center text-medium-emphasis text-body-2" v-else>
-            Employee basic information saved. Now, collect face data.
+          <p class="text-center text-medium-emphasis text-body-2" v-if="!isEditing">
+            Please fill in the employee information. Afterward, you will collect the facial data.
           </p>
           <v-container>
             <v-row>
@@ -120,8 +117,9 @@
                   variant="outlined"
                   density="compact"
                   required
-                  :readonly="isEditing || newlyAddedEmployeeId"
+                  :readonly="isEditing"
                   v-model="editedEmployee.employee_id"
+                  :rules="[v => !!v || 'Employee ID is required']"
                 ></v-text-field>
               </v-col>
               <v-col cols="12" md="6">
@@ -130,8 +128,8 @@
                   variant="outlined"
                   density="compact"
                   required
-                  :readonly="newlyAddedEmployeeId"
                   v-model="editedEmployee.full_name"
+                  :rules="[v => !!v || 'Full Name is required']"
                 ></v-text-field>
               </v-col>
               <v-col cols="12" md="6">
@@ -139,7 +137,6 @@
                   label="Email"
                   variant="outlined"
                   density="compact"
-                  :readonly="newlyAddedEmployeeId"
                   v-model="editedEmployee.email"
                 ></v-text-field>
               </v-col>
@@ -148,7 +145,6 @@
                   label="Phone Number"
                   variant="outlined"
                   density="compact"
-                  :readonly="newlyAddedEmployeeId"
                   v-model="editedEmployee.phone"
                 ></v-text-field>
               </v-col>
@@ -158,7 +154,6 @@
                   variant="outlined"
                   density="compact"
                   :items="['IT', 'HR', 'Marketing', 'Sales', 'Finance', 'Operations']"
-                  :readonly="newlyAddedEmployeeId"
                   v-model="editedEmployee.department"
                 ></v-select>
               </v-col>
@@ -167,7 +162,6 @@
                   label="Position"
                   variant="outlined"
                   density="compact"
-                  :readonly="newlyAddedEmployeeId"
                   v-model="editedEmployee.position"
                 ></v-text-field>
               </v-col>
@@ -187,20 +181,19 @@
           <v-btn
             color="primary"
             variant="flat"
-            @click="saveEmployee"
+            @click="processEmployeeAction"
             :disabled="loading"
           >
             <span v-if="isEditing">Update</span>
-            <span v-else-if="newlyAddedEmployeeId">Add New Employee</span>
-            <span v-else>Save & Collect Face Data</span>
+            <span v-else>Collect Face Data</span>
           </v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
 
     <FaceCapture
-      v-if="showFaceCaptureDialog && newlyAddedEmployeeId"
-      :userId="newlyAddedEmployeeId"
+      v-if="showFaceCaptureDialog && pendingEmployeeData && pendingEmployeeData.employee_id"
+      :userId="pendingEmployeeData.employee_id"
       @completed="onFaceCaptureCompleted"
       @cancelled="onFaceCaptureCancelled"
     />
@@ -286,8 +279,8 @@ export default defineComponent({
       { title: 'Actions', key: 'actions', sortable: false, align: 'center' },
     ]);
 
-    const newlyAddedEmployeeId = ref(null);
-    const showFaceCaptureDialog = ref(false); // New state for FaceCapture dialog
+    const pendingEmployeeData = ref(null); // NEW: Lưu trữ dữ liệu nhân viên tạm thời
+    const showFaceCaptureDialog = ref(false);
 
     // Debounce search input
     let searchTimeout = null;
@@ -326,14 +319,14 @@ export default defineComponent({
 
     const openAddEmployeeDialog = () => {
       isEditing.value = false;
-      newlyAddedEmployeeId.value = null; // Reset for new addition
+      pendingEmployeeData.value = null; // Reset
       editedEmployee.value = { ...defaultEmployee };
       employeeDialog.value = true;
     };
 
     const openEditEmployeeDialog = (emp) => {
       isEditing.value = true;
-      newlyAddedEmployeeId.value = null; // Ensure this is null for editing
+      pendingEmployeeData.value = null; // Ensure this is null for editing
       editedEmployee.value = { ...emp };
       employeeDialog.value = true;
     };
@@ -341,77 +334,87 @@ export default defineComponent({
     const closeEmployeeDialog = () => {
       employeeDialog.value = false;
       editedEmployee.value = {};
-      newlyAddedEmployeeId.value = null; // Also reset if dialog is closed
+      pendingEmployeeData.value = null; // Clear pending data if dialog is closed
     };
 
-    const saveEmployee = async () => {
-      if (!editedEmployee.value.employee_id || !editedEmployee.value.full_name || !editedEmployee.value.department) {
-        return showSnackbar('Missing required fields', 'warning');
-      }
-
-      loading.value = true; // Set loading state for the button
-
-      try {
-        const formData = new FormData();
-        Object.keys(editedEmployee.value).forEach(key => {
-          if (editedEmployee.value[key] !== null) {
-            formData.append(key, editedEmployee.value[key]);
-          }
-        });
-
-        if (isEditing.value) {
-          // This path is for editing existing employee data
+    // NEW: Hàm này sẽ xử lý cả việc update và bắt đầu thu thập khuôn mặt
+    const processEmployeeAction = async () => {
+      if (isEditing.value) {
+        // Logic chỉnh sửa nhân viên hiện có
+        if (!editedEmployee.value.employee_id || !editedEmployee.value.full_name || !editedEmployee.value.department) {
+          return showSnackbar('Missing required fields', 'warning');
+        }
+        loading.value = true;
+        try {
+          const formData = new FormData();
+          Object.keys(editedEmployee.value).forEach(key => {
+            if (editedEmployee.value[key] !== null) {
+              formData.append(key, editedEmployee.value[key]);
+            }
+          });
           await updateEmployee(editedEmployee.value.employee_id, formData);
           showSnackbar('Employee updated', 'success');
           closeEmployeeDialog();
           fetchEmployees();
-        } else if (newlyAddedEmployeeId.value) {
-          // This path is for finalizing the addition after face capture
-          // The employee object already exists in the backend from the first step
-          // We just need to close the dialog and refresh the list.
-          // In a real scenario, you might have a separate API call here
-          // to update the employee status to 'active' or similar after face data.
-          // For now, we assume the employee is ready after face capture.
-          showSnackbar('New employee added successfully!', 'success');
-          closeEmployeeDialog();
-          fetchEmployees();
+        } catch (error) {
+          showSnackbar('Error updating employee: ' + (error.message || 'Unknown'), 'error');
+        } finally {
+          loading.value = false;
         }
-        else {
-          // This path is for initially saving basic employee data before face capture
-          const res = await addEmployee(formData);
-          newlyAddedEmployeeId.value = res.employee_id || res.id || editedEmployee.value.employee_id;
-          
-          if (newlyAddedEmployeeId.value) {
-            showSnackbar('Employee basic info saved. Now, collecting face data.', 'info');
-            // Close the current dialog and open FaceCapture
-            employeeDialog.value = false; 
-            showFaceCaptureDialog.value = true; // Show face capture dialog
-          } else {
-            throw new Error('Failed to get employee ID after saving basic info.');
-          }
+      } else {
+        // Logic cho việc thêm nhân viên mới (bước 1: điền thông tin và chuẩn bị chụp khuôn mặt)
+        if (!editedEmployee.value.employee_id || !editedEmployee.value.full_name || !editedEmployee.value.department) {
+          return showSnackbar('Missing required fields', 'warning');
         }
-      } catch (error) {
-        showSnackbar('Error saving employee: ' + (error.message || 'Unknown'), 'error');
-      } finally {
-        loading.value = false; // Reset loading state
+        
+        // Lưu thông tin nhân viên vào biến tạm thời, chưa gọi API addEmployee
+        pendingEmployeeData.value = { ...editedEmployee.value };
+        
+        showSnackbar('The employee information is ready. Please proceed to collect the facial data.', 'info');
+        employeeDialog.value = false; // Đóng dialog thông tin nhân viên
+        showFaceCaptureDialog.value = true; // Mở dialog FaceCapture
       }
     };
 
-    const onFaceCaptureCompleted = () => {
-      showSnackbar('✅ Face data collected successfully!', 'success');
-      showFaceCaptureDialog.value = false; // Hide face capture dialog
-      // Re-open the employee dialog to finalize the addition
-      // We pass the editedEmployee value so the ID is pre-filled
-      employeeDialog.value = true; 
+    // NEW: Hàm này chỉ được gọi khi FaceCapture hoàn thành thành công
+    const onFaceCaptureCompleted = async () => {
+      showSnackbar('Facial data has been successfully collected! Saving the employee...', 'info');
+      showFaceCaptureDialog.value = false; // Ẩn dialog FaceCapture
+
+      if (!pendingEmployeeData.value) {
+        showSnackbar('Error: No employee data is waiting to be saved.', 'error');
+        return;
+      }
+
+      loading.value = true;
+      try {
+        const formData = new FormData();
+        Object.keys(pendingEmployeeData.value).forEach(key => {
+          if (pendingEmployeeData.value[key] !== null) {
+            formData.append(key, pendingEmployeeData.value[key]);
+          }
+        });
+        
+        // Gửi yêu cầu thêm nhân viên với đầy đủ thông tin (bao gồm cả dữ liệu khuôn mặt đã xử lý ở backend)
+        await addEmployee(formData); 
+        showSnackbar('New employee has been successfully added!', 'success');
+        
+        pendingEmployeeData.value = null; // Xóa dữ liệu tạm thời
+        closeEmployeeDialog(); // Đóng dialog (nếu đang mở, mặc dù nó đã đóng ở bước trước)
+        fetchEmployees(); // Tải lại danh sách nhân viên
+      } catch (error) {
+        showSnackbar('Error while adding the employee:' + (error.message || 'Unknown'), 'error');
+        // Nếu thêm thất bại, bạn có thể cân nhắc xóa dữ liệu khuôn mặt vừa thu thập ở backend nếu cần
+      } finally {
+        loading.value = false;
+      }
     };
 
     const onFaceCaptureCancelled = () => {
-      showSnackbar('Face data collection cancelled. Employee not fully added.', 'warning');
-      showFaceCaptureDialog.value = false; // Hide face capture dialog
-      newlyAddedEmployeeId.value = null; // Clear the ID as the process was cancelled
-      // You might want to delete the partially added employee from the backend here
-      // or mark it as 'pending' with an incomplete status.
-      closeEmployeeDialog(); // Close the initial employee dialog as well
+      showSnackbar('Face data collection has been cancelled. The employee will not be saved.', 'warning');
+      showFaceCaptureDialog.value = false; // Ẩn FaceCapture
+      pendingEmployeeData.value = null; // Xóa dữ liệu tạm thời vì quá trình bị hủy
+      closeEmployeeDialog(); // Đóng dialog nhân viên nếu nó đang mở
     };
 
     const confirmSoftDelete = (e) => { selectedEmployee.value = e; actionType.value = 'delete'; confirmDialog.value = true; };
@@ -439,88 +442,13 @@ export default defineComponent({
     return {
       employees, totalEmployees, loading, searchQuery, options,
       employeeDialog, isEditing, editedEmployee, headers,
-      openAddEmployeeDialog, openEditEmployeeDialog, closeEmployeeDialog, saveEmployee,
+      openAddEmployeeDialog, openEditEmployeeDialog, closeEmployeeDialog, processEmployeeAction, // Updated method name
       confirmDialog, selectedEmployee, actionType,
       confirmSoftDelete, confirmRestoreEmployee, executeConfirmedAction,
       snackbar, showSnackbar, updateOptions, debouncedSearch,
-      newlyAddedEmployeeId, showFaceCaptureDialog, onFaceCaptureCompleted, onFaceCaptureCancelled,
+      pendingEmployeeData, showFaceCaptureDialog, onFaceCaptureCompleted, onFaceCaptureCancelled, // Updated state and methods
       defaultAvatar
     };
   }
 });
 </script>
-
-<style scoped>
-.employee-management-content {
-  padding: 30px;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-.employee-panel-title {
-  font-size: 24px;
-  font-weight: 600;
-  color: #1e293b;
-  margin-bottom: 0;
-}
-
-/* Custom dialog titles */
-.primary-title-dialog {
-  background-color: #667eea;
-  color: white;
-  padding-left: 24px !important;
-}
-
-.red-title-dialog {
-  background-color: #ef4444;
-  color: white;
-  padding-left: 24px !important;
-}
-
-/* Avatar styling */
-.v-avatar {
-  border: 1px solid #eee;
-}
-
-/* Adjust table styling */
-.v-data-table-server {
-  box-shadow: none !important;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-/* Table headers styling */
-:deep(.v-data-table-server .v-data-table-header th) {
-  background-color: #f8fafc !important;
-  font-weight: 600 !important;
-  color: #334155 !important;
-  font-size: 0.875rem !important;
-}
-
-:deep(.v-data-table-server .v-data-table__td) {
-  font-size: 0.9rem !important;
-}
-
-/* Responsive adjustments */
-@media (max-width: 768px) {
-  .employee-management-content {
-    padding: 20px;
-  }
-  
-  .employee-panel-title {
-    font-size: 20px;
-  }
-  
-  .d-flex.align-center.justify-space-between.mb-4 {
-    flex-direction: column;
-    align-items: flex-start !important;
-    gap: 15px;
-  }
-  
-  .v-btn {
-    width: 100%;
-  }
-}
-</style>

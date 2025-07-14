@@ -20,10 +20,10 @@ export const useAuthStore = defineStore('auth', () => {
 
   // Actions
   const login = (authToken, userData) => {
-    console.log('🔑 Login called with:', { token: authToken?.substring(0, 20) + '...', user: userData })
+    console.log('Login called with:', { token: authToken?.substring(0, 20) + '...', user: userData })
     
     if (!authToken || !userData) {
-      console.error('❌ Invalid login data')
+      console.error('Invalid login data')
       return false
     }
     
@@ -35,10 +35,10 @@ export const useAuthStore = defineStore('auth', () => {
       localStorage.setItem('token', authToken)
       localStorage.setItem('user', JSON.stringify(userData))
       
-      console.log('✅ Auth data saved to localStorage')
-      console.log('✅ isAuthenticated:', isAuthenticated.value)
+      console.log('Auth data saved to localStorage')
+      console.log('isAuthenticated:', isAuthenticated.value)
     } catch (e) {
-      console.error('❌ Error saving to localStorage:', e)
+      console.error('Error saving to localStorage:', e)
     }
     
     error.value = null
@@ -46,16 +46,16 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   const logout = async () => { // <--- THÊM 'async' VÌ CHÚNG TA SẼ GỌI API BẤT ĐỒNG BỘ
-    console.log('🚪 Logout called from store');
+    console.log('Logout called from store');
     
     // 1. Gọi API logout backend
     try {
       if (token.value) { // Chỉ gọi API nếu có token (người dùng đang đăng nhập)
         await logoutAdmin();
       }
-      console.log('✅ Backend logout successful or not needed (no token).');
+      console.log('Backend logout successful or not needed (no token).');
     } catch (error) {
-      console.error('❌ Error during backend logout API call, but proceeding with frontend logout:', error);
+      console.error('Error during backend logout API call, but proceeding with frontend logout:', error);
     } finally {
       // Xóa token và user khỏi Pinia store
       token.value = null;
@@ -65,9 +65,9 @@ export const useAuthStore = defineStore('auth', () => {
       try {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
-        console.log('✅ Auth data cleared from localStorage');
+        console.log('Auth data cleared from localStorage');
       } catch (e) {
-        console.error('❌ Error clearing localStorage:', e);
+        console.error('Error clearing localStorage:', e);
       }
     
       error.value = null;
@@ -87,7 +87,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   const updateUser = (userData) => {
-    console.log('👤 Update user called with:', userData)
+    console.log('Update user called with:', userData)
     
     if (!userData) return
     
@@ -95,9 +95,9 @@ export const useAuthStore = defineStore('auth', () => {
     
     try {
       localStorage.setItem('user', JSON.stringify(user.value))
-      console.log('✅ User updated in localStorage')
+      console.log('User updated in localStorage')
     } catch (e) {
-      console.error('❌ Error updating user in localStorage:', e)
+      console.error('Error updating user in localStorage:', e)
     }
   }
 
@@ -105,7 +105,7 @@ export const useAuthStore = defineStore('auth', () => {
   const initializeFromStorage = () => {
     if (isInitialized.value) return
     
-    console.log('🔄 Initializing auth store from localStorage...')
+    console.log('Initializing auth store from localStorage...')
     
     try {
       const storedToken = localStorage.getItem('token')
@@ -119,13 +119,13 @@ export const useAuthStore = defineStore('auth', () => {
           token.value = storedToken
           user.value = parsedUser
           
-          console.log('✅ Auth restored from localStorage:', {
+          console.log('Auth restored from localStorage:', {
             hasToken: !!token.value,
             username: user.value.username,
             isAuthenticated: isAuthenticated.value
           })
         } else {
-          console.log('❌ Invalid user data in localStorage, clearing...')
+          console.log('Invalid user data in localStorage, clearing...')
           localStorage.removeItem('token')
           localStorage.removeItem('user')
         }
@@ -133,7 +133,7 @@ export const useAuthStore = defineStore('auth', () => {
         console.log('ℹ️ No valid auth data in localStorage')
       }
     } catch (e) {
-      console.error('❌ Error initializing from localStorage:', e)
+      console.error('Error initializing from localStorage:', e)
       // Clear corrupted data
       localStorage.removeItem('token')
       localStorage.removeItem('user')
@@ -152,7 +152,7 @@ export const useAuthStore = defineStore('auth', () => {
       // return response.success
       return true
     } catch (error) {
-      console.error('❌ Session validation failed:', error)
+      console.error('Session validation failed:', error)
       logout()
       return false
     }

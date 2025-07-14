@@ -283,15 +283,15 @@ def export_to_excel(report_type, start_date, end_date):
             report = process_employee_attendance(employee_id, start_date, end_date)
             
             data.append({
-                "Mã nhân viên": employee.employee_id,
-                "Họ tên": employee.full_name,
-                "Phòng ban": employee.department,
-                "Chức vụ": employee.position,
-                "Ngày công chuẩn": report["normal_days"],
-                "Ngày đi muộn": report["late_days"],
-                "Ngày nửa công": report["half_days"],
-                "Tổng ngày có mặt": report["total_attendance_days"],
-                "Tổng giờ làm việc": report["total_work_hours"]
+                "Employee ID": employee.employee_id,
+                "Full Name": employee.full_name,
+                "Department": employee.department,
+                "Position": employee.position,
+                "Valid workday": report["normal_days"],
+                "Late arrival day": report["late_days"],
+                "Half-day work": report["half_days"],
+                "Total attendance days": report["total_attendance_days"],
+                "Total working hours": report["total_work_hours"]
             })
         
         elif report_type.startswith('department/'):
@@ -304,15 +304,15 @@ def export_to_excel(report_type, start_date, end_date):
                 report = process_employee_attendance(employee.employee_id, start_date, end_date)
                 
                 data.append({
-                    "Mã nhân viên": employee.employee_id,
-                    "Họ tên": employee.full_name,
-                    "Phòng ban": employee.department,
-                    "Chức vụ": employee.position,
-                    "Ngày công chuẩn": report["normal_days"],
-                    "Ngày đi muộn": report["late_days"],
-                    "Ngày nửa công": report["half_days"],
-                    "Tổng ngày có mặt": report["total_attendance_days"],
-                    "Tổng giờ làm việc": report["total_work_hours"]
+                    "Employee ID": employee.employee_id,
+                    "Full Name": employee.full_name,
+                    "Department": employee.department,
+                    "Position": employee.position,
+                    "Valid Workday": report["normal_days"],
+                    "Late workday": report["late_days"],
+                    "Half-day Work": report["half_days"],
+                    "Total Attendance Days": report["total_attendance_days"],
+                    "Total Working Hours": report["total_work_hours"]
                 })
         
         elif report_type == 'company':
@@ -324,15 +324,15 @@ def export_to_excel(report_type, start_date, end_date):
                 report = process_employee_attendance(employee.employee_id, start_date, end_date)
                 
                 data.append({
-                    "Mã nhân viên": employee.employee_id,
-                    "Họ tên": employee.full_name,
-                    "Phòng ban": employee.department,
-                    "Chức vụ": employee.position,
-                    "Ngày công chuẩn": report["normal_days"],
-                    "Ngày đi muộn": report["late_days"],
-                    "Ngày nửa công": report["half_days"],
-                    "Tổng ngày có mặt": report["total_attendance_days"],
-                    "Tổng giờ làm việc": report["total_work_hours"]
+                    "Employee ID": employee.employee_id,
+                    "Full Name": employee.full_name,
+                    "Department": employee.department,
+                    "Position": employee.position,
+                    "Valid Workdays": report["normal_days"],
+                    "Late Workday": report["late_days"],
+                    "Half-day works": report["half_days"],
+                    "Total Attendance Days": report["total_attendance_days"],
+                    "Total Working Hours": report["total_work_hours"]
                 })
         
         else:
@@ -341,10 +341,10 @@ def export_to_excel(report_type, start_date, end_date):
         # Tạo file Excel
         wb = openpyxl.Workbook()
         ws = wb.active
-        ws.title = "Báo cáo chấm công"
+        ws.title = "Attendance Report"
         
         # Thêm tiêu đề
-        title_row = [f"BÁO CÁO CHẤM CÔNG - {format_datetime_vn(start_date)} đến {format_datetime_vn(end_date)}"]
+        title_row = [f"ATTENDANCE REPORT - {format_datetime_vn(start_date)} đến {format_datetime_vn(end_date)}"]
         ws.append(title_row)
         ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=9)
         ws['A1'].font = Font(bold=True, size=14)
@@ -354,7 +354,7 @@ def export_to_excel(report_type, start_date, end_date):
         ws.append([])
         
         # Headers
-        headers = ["Mã nhân viên", "Họ tên", "Phòng ban", "Chức vụ", "Ngày công chuẩn", "Ngày đi muộn", "Ngày nửa công", "Tổng ngày có mặt", "Tổng giờ làm việc"]
+        headers = ["Employee ID", "Full Name", "Department", "Position", "Valid Workdays", "Late Workday", "Half-day Work", "Total Attendance Days", "Total Working Hours"]
         ws.append(headers)
         
         # Style headers
@@ -365,15 +365,15 @@ def export_to_excel(report_type, start_date, end_date):
         # Thêm dữ liệu
         for row_data in data:
             ws.append([
-                row_data["Mã nhân viên"],
-                row_data["Họ tên"],
-                row_data["Phòng ban"],
-                row_data["Chức vụ"],
-                row_data["Ngày công chuẩn"],
-                row_data["Ngày đi muộn"],
-                row_data["Ngày nửa công"],
-                row_data["Tổng ngày có mặt"],
-                row_data["Tổng giờ làm việc"]
+                row_data["Employee ID"],
+                row_data["Full Name"],
+                row_data["Department"],
+                row_data["Position"],
+                row_data["Valid Workdays"],
+                row_data["Late Workday"],
+                row_data["Half-day Work"],
+                row_data["Total Attendance Days"],
+                row_data["Total Working Hours"]
             ])
         
         # Auto-adjust column widths
