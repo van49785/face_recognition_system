@@ -21,6 +21,7 @@
         hide-details
         class="mb-4"
         @input="debouncedSearch"
+        @click:clear="onSearchClear"
       ></v-text-field>
 
       <v-data-table-server
@@ -253,7 +254,7 @@
 
 <script>
 import '@/assets/css/EmployeeManagementTab.css';
-import { defineComponent, ref, onMounted } from 'vue';
+import { defineComponent, ref, onMounted, watch } from 'vue'; // Thêm watch vào import
 import {
   getEmployees, deleteEmployee, restoreEmployee, addEmployee, updateEmployee
 } from '../services/api';
@@ -291,42 +292,73 @@ export default defineComponent({
       { title: 'Actions', key: 'actions', sortable: false, align: 'center' },
     ]);
 
-    // NEW: ID của nhân viên được truyền cho FaceCapture
-    const employeeIdForFaceCapture = ref(null); 
-    // NEW: Cờ để báo cho FaceCapture biết đây là thêm mới hay chỉnh sửa (ảnh hưởng đến backend)
-    const isNewEmployeeBeingCaptured = ref(false); 
-    const showFaceCaptureDialog = ref(false); 
-    
-    // NEW: Kiểm soát việc có thể chỉnh sửa ID trong dialog edit hay không (mặc định là không)
-    const canEditIdInDialog = ref(false); 
+    // Face capture related
+    const employeeIdForFaceCapture = ref(null);
+    const isNewEmployeeBeingCaptured = ref(false);
+    const showFaceCaptureDialog = ref(false);
+    const canEditIdInDialog = ref(false);
 
     // Debounce search input
     let searchTimeout = null;
-    const debouncedSearch = () => {
-      clearTimeout(searchTimeout);
-      searchTimeout = setTimeout(() => {
-        fetchEmployees();
-      }, 500); // 500ms delay
-    };
 
+    // Function to fetch employees
     const fetchEmployees = async () => {
       loading.value = true;
       try {
         const { page, itemsPerPage, sortBy } = options.value;
         const sortField = sortBy[0]?.key || 'created_at';
         const sortOrder = sortBy[0]?.order === 'desc' ? 'desc' : 'desc';
-        const params = { page, limit: itemsPerPage, sort_by: sortField, sort_order: sortOrder };
-        if (searchQuery.value) params.search = searchQuery.value;
+        
+        const params = { 
+          page, 
+          limit: itemsPerPage, 
+          sort_by: sortField, 
+          sort_order: sortOrder 
+        };
+        
+        // Thêm search parameter nếu có
+        if (searchQuery.value && searchQuery.value.trim()) {
+          params.search = searchQuery.value.trim();
+        }
+        
         const response = await getEmployees(params);
         employees.value = response.employees || [];
         totalEmployees.value = response.total || 0;
       } catch (error) {
+        console.error('Error fetching employees:', error);
         showSnackbar('Error loading employee list', 'error');
         employees.value = [];
+        totalEmployees.value = 0;
       } finally {
         loading.value = false;
       }
     };
+
+    // Debounced search function
+    const debouncedSearch = () => {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(() => {
+        // Reset về trang đầu khi search
+        options.value.page = 1;
+        fetchEmployees();
+      }, 300); // Giảm xuống 300ms cho responsive hơn
+    };
+
+    // Handle search clear
+    const onSearchClear = () => {
+      searchQuery.value = '';
+      options.value.page = 1;
+      fetchEmployees();
+    };
+
+    // Watch searchQuery for changes
+    watch(searchQuery, (newValue) => {
+      if (!newValue || newValue.trim() === '') {
+        // Nếu search query rỗng, reset về trang đầu và fetch lại
+        options.value.page = 1;
+        fetchEmployees();
+      }
+    });
 
     const updateOptions = (newOptions) => {
       if (JSON.stringify(options.value) !== JSON.stringify(newOptions)) {
@@ -337,16 +369,16 @@ export default defineComponent({
 
     const openAddEmployeeDialog = () => {
       isEditing.value = false;
-      employeeIdForFaceCapture.value = null; // Reset
-      isNewEmployeeBeingCaptured.value = false; // Reset
+      employeeIdForFaceCapture.value = null;
+      isNewEmployeeBeingCaptured.value = false;
       editedEmployee.value = { ...defaultEmployee };
       employeeDialog.value = true;
     };
 
     const openEditEmployeeDialog = (emp) => {
       isEditing.value = true;
-      employeeIdForFaceCapture.value = null; // Reset
-      isNewEmployeeBeingCaptured.value = false; // Reset
+      employeeIdForFaceCapture.value = null;
+      isNewEmployeeBeingCaptured.value = false;
       editedEmployee.value = { ...emp };
       employeeDialog.value = true;
     };
@@ -354,15 +386,15 @@ export default defineComponent({
     const closeEmployeeDialog = () => {
       employeeDialog.value = false;
       editedEmployee.value = {};
-      employeeIdForFaceCapture.value = null; // Clear if dialog is closed
-      isNewEmployeeBeingCaptured.value = false; // Clear
+      employeeIdForFaceCapture.value = null;
+      isNewEmployeeBeingCaptured.value = false;
     };
 
     const saveEmployee = async () => {
       if (!editedEmployee.value.employee_id || !editedEmployee.value.full_name || !editedEmployee.value.department) {
         return showSnackbar('Missing required fields', 'warning');
       }
-      loading.value = true; 
+      loading.value = true;
       try {
         const formData = new FormData();
         Object.keys(editedEmployee.value).forEach(key => {
@@ -372,37 +404,34 @@ export default defineComponent({
         });
 
         if (isEditing.value) {
-          // Cập nhật thông tin nhân viên
           await updateEmployee(editedEmployee.value.employee_id, formData);
           showSnackbar('Employee updated', 'success');
           closeEmployeeDialog();
         } else {
-          // Thêm nhân viên mới (chỉ lưu thông tin cơ bản)
           const res = await addEmployee(formData);
           const newId = res.employee_id || res.id || editedEmployee.value.employee_id;
-          editedEmployee.value.employee_id = newId; // Cập nhật ID nếu backend trả về
+          editedEmployee.value.employee_id = newId;
           showSnackbar('Employee added successfully. You can now proceed to train the face.', 'success');
-          // Sau khi thêm, chuyển sang bước thu thập khuôn mặt cho nhân viên mới
+          
           employeeIdForFaceCapture.value = newId;
-          isNewEmployeeBeingCaptured.value = true; // Báo hiệu đây là nhân viên mới
-          employeeDialog.value = false; // Đóng dialog thông tin
-          showFaceCaptureDialog.value = true; // Mở dialog FaceCapture
+          isNewEmployeeBeingCaptured.value = true;
+          employeeDialog.value = false;
+          showFaceCaptureDialog.value = true;
         }
-        fetchEmployees(); // Cập nhật lại danh sách sau khi thêm/sửa
+        fetchEmployees();
       } catch (error) {
         showSnackbar('Error saving employee: ' + (error.message || 'Unknown'), 'error');
       } finally {
         loading.value = false;
       }
     };
-    
-    // NEW: Mở FaceCapture từ dialog chỉnh sửa
+
     const openFaceCaptureForEdit = () => {
       if (editedEmployee.value.employee_id) {
         employeeIdForFaceCapture.value = editedEmployee.value.employee_id;
-        isNewEmployeeBeingCaptured.value = false; // Đây không phải thêm mới, mà là cập nhật
-        employeeDialog.value = false; // Đóng dialog thông tin
-        showFaceCaptureDialog.value = true; // Mở dialog FaceCapture
+        isNewEmployeeBeingCaptured.value = false;
+        employeeDialog.value = false;
+        showFaceCaptureDialog.value = true;
       } else {
         showSnackbar('Please select an employee or enter the ID to train the face.', 'warning');
       }
@@ -410,34 +439,36 @@ export default defineComponent({
 
     const onFaceCaptureCompleted = () => {
       showSnackbar('Facial data has been successfully collected/updated!', 'success');
-      showFaceCaptureDialog.value = false; // Ẩn dialog FaceCapture
-      // Sau khi FaceCapture hoàn tất, có thể mở lại dialog thông tin nhân viên nếu muốn
+      showFaceCaptureDialog.value = false;
       if (isEditing.value) {
-          employeeDialog.value = true; // Mở lại dialog edit
+        employeeDialog.value = true;
       } else {
-          // Nếu đây là quá trình thêm mới, đóng luôn dialog sau khi hoàn tất
-          closeEmployeeDialog();
+        closeEmployeeDialog();
       }
-      fetchEmployees(); // Đảm bảo danh sách được cập nhật
+      fetchEmployees();
     };
 
     const onFaceCaptureCancelled = () => {
       showSnackbar('Facial data collection has been cancelled.', 'warning');
-      showFaceCaptureDialog.value = false; // Ẩn FaceCapture
-      // Mở lại dialog thông tin nhân viên nếu đang chỉnh sửa
+      showFaceCaptureDialog.value = false;
       if (isEditing.value) {
-          employeeDialog.value = true;
-      } else {
-          // Nếu đang thêm mới và bị hủy, không cần làm gì thêm vì nhân viên đã được lưu
-          // Bạn có thể cân nhắc thêm một bước hỏi người dùng có muốn xóa nhân viên vừa thêm không
-          // Nếu dữ liệu khuôn mặt là bắt buộc.
+        employeeDialog.value = true;
       }
-      employeeIdForFaceCapture.value = null; // Clear
-      isNewEmployeeBeingCaptured.value = false; // Clear
+      employeeIdForFaceCapture.value = null;
+      isNewEmployeeBeingCaptured.value = false;
     };
 
-    const confirmSoftDelete = (e) => { selectedEmployee.value = e; actionType.value = 'delete'; confirmDialog.value = true; };
-    const confirmRestoreEmployee = (e) => { selectedEmployee.value = e; actionType.value = 'restore'; confirmDialog.value = true; };
+    const confirmSoftDelete = (e) => { 
+      selectedEmployee.value = e; 
+      actionType.value = 'delete'; 
+      confirmDialog.value = true; 
+    };
+    
+    const confirmRestoreEmployee = (e) => { 
+      selectedEmployee.value = e; 
+      actionType.value = 'restore'; 
+      confirmDialog.value = true; 
+    };
 
     const executeConfirmedAction = async () => {
       if (!selectedEmployee.value) return;
@@ -464,9 +495,9 @@ export default defineComponent({
       openAddEmployeeDialog, openEditEmployeeDialog, closeEmployeeDialog, saveEmployee,
       confirmDialog, selectedEmployee, actionType,
       confirmSoftDelete, confirmRestoreEmployee, executeConfirmedAction,
-      snackbar, showSnackbar, updateOptions, debouncedSearch,
+      snackbar, showSnackbar, updateOptions, debouncedSearch, onSearchClear,
       employeeIdForFaceCapture, showFaceCaptureDialog, onFaceCaptureCompleted, onFaceCaptureCancelled,
-      isNewEmployeeBeingCaptured, openFaceCaptureForEdit, // NEW: Thêm hàm và biến mới
+      isNewEmployeeBeingCaptured, openFaceCaptureForEdit,
       canEditIdInDialog,
       defaultAvatar
     };

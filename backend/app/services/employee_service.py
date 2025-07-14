@@ -113,10 +113,10 @@ def get_employees_logic(status_param=None, page=1, limit=10, search='', sort_by=
         search_term = f"%{search}%"
         query = query.filter(
             db.or_(
-                Employee.employee_id.ilike(search_term),
-                Employee.full_name.ilike(search_term),
-                Employee.email.ilike(search_term),
-                Employee.department.ilike(search_term)
+                Employee.employee_id.like(search_term),
+                Employee.full_name.like(search_term),
+                Employee.email.like(search_term),
+                Employee.department.like(search_term)
             )
         )
     
