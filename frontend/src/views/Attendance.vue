@@ -539,14 +539,17 @@ formatHistoryDate(dateString) {
         
         response.records.forEach(record => {
           let date;
+          let timeString;
           
           // Parse timestamp từ backend (có thể là DD/MM/YYYY HH:mm:ss)
           if (record.timestamp) {
             if (typeof record.timestamp === 'string' && record.timestamp.includes('/')) {
               // Parse DD/MM/YYYY HH:mm:ss format
               const parts = record.timestamp.split(' ');
-              if (parts.length >= 1) {
+              if (parts.length >= 2) {
                 const datePart = parts[0]; // "13/07/2025"
+                const timePart = parts[1]; // "21:04:37"
+                
                 const dateComponents = datePart.split('/');
                 if (dateComponents.length === 3) {
                   const day = dateComponents[0];
@@ -554,13 +557,22 @@ formatHistoryDate(dateString) {
                   const year = dateComponents[2];
                   
                   // Create date in MM/DD/YYYY format for JavaScript Date constructor
-                  const jsDateString = `${month}/${day}/${year}`;
+                  const jsDateString = `${month}/${day}/${year} ${timePart}`;
                   date = new Date(jsDateString);
+                  
+                  // Use the time part directly from the timestamp
+                  timeString = timePart;
                 }
               }
             } else {
               // Try parsing as ISO string or other formats
               date = new Date(record.timestamp);
+              timeString = date.toLocaleTimeString('en-US', { 
+                hour12: false,
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+              });
             }
           }
           
@@ -568,6 +580,7 @@ formatHistoryDate(dateString) {
           if (!date || isNaN(date.getTime())) {
             console.error('Invalid timestamp in record:', record.timestamp);
             date = new Date(); // Use current date as fallback
+            timeString = "00:00:00"; // Default time if parsing fails
           }
           
           // Format date as YYYY-MM-DD for consistency
@@ -581,14 +594,6 @@ formatHistoryDate(dateString) {
               status: 'Absent' 
             };
           }
-          
-          // Format time for display
-          const timeString = date.toLocaleTimeString('en-US', { 
-            hour12: false,
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit'
-          });
           
           if (record.status === 'check-in') {
             historyMap[dateKey].check_in = timeString;

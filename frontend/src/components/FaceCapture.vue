@@ -1,16 +1,14 @@
-<!-- src/components/FaceCapture.vue -->
-
 <template>
   <div class="face-capture-overlay">
     <div class="face-capture-container">
       <div class="face-capture-header">
-        <h2>Collecting Facial Data.</h2>
+        <h2>Collecting facial data</h2>
         <p>Employee: <strong>{{ userId }}</strong></p>
       </div>
 
       <div class="face-capture-content">
         <div class="instructions-section">
-          <h3>Collection Instructions:</h3>
+          <h3>Collection instructions:</h3>
           <ul>
             <li>The system will collect 5 different facial images.</li>
             <li>Please follow the direction specified.</li>
@@ -24,7 +22,7 @@
           <div class="video-overlay" v-if="!isTraining">
             <div class="overlay-content">
               <v-icon size="64" color="white">mdi-camera</v-icon>
-              <p>Press "Start" to begin collecting facial data.</p>
+              <p>Press "Start" to begin collecting facial data</p>
             </div>
           </div>
           <div class="video-overlay current-pose" v-if="isTraining && currentPose">
@@ -82,7 +80,7 @@
             @click="startTraining"
             class="control-btn"
           >
-            {{ isTraining ? 'Collecting data...' : 'Starting the collection.' }}
+            {{ isTraining ? 'Collecting data...' : 'Starting the collection' }}
           </v-btn>
           <v-btn
             :disabled="!isTraining"
@@ -92,7 +90,7 @@
             @click="stopTraining"
             class="control-btn"
           >
-            Dừng
+            Stop
           </v-btn>
           <v-btn
             color="grey-darken-2"
@@ -101,7 +99,7 @@
             @click="closeCapture"
             class="control-btn"
           >
-            Đóng
+            Close
           </v-btn>
         </div>
 
@@ -144,11 +142,11 @@ export default defineComponent({
     const captureTimeout = ref(null)
 
     const poseLabels = {
-      front: 'Look straight into the camera.',
-      left: 'Turn your face to the left.',
-      right: 'Turn your face to the right.',
-      up: 'Look up.',
-      down: 'Look down.'
+      front: 'Look straight into the camera',
+      left: 'Turn your face to the left',
+      right: 'Turn your face to the right',
+      up: 'Look up',
+      down: 'Look down'
     }
 
     const poseIcons = {
@@ -269,16 +267,16 @@ export default defineComponent({
         currentPose.value = pose
         
         try {
-            showStatus(`Preparing to capture the image... ${getPoseLabel(pose)}...`, 'info')
+            showStatus(`Preparing to capture the image ${getPoseLabel(pose)}...`, 'info')
             
             // Đợi một chút để người dùng chuẩn bị
             await new Promise(resolve => setTimeout(resolve, 2000))
             
-            showStatus(`Capturing the image... ${getPoseLabel(pose)}...`, 'info')
+            showStatus(`Capturing the image ${getPoseLabel(pose)}...`, 'info')
             
             const imageBlob = await captureFrame()
             if (!imageBlob) {
-            throw new Error('Unable to capture the image.')
+            throw new Error('Unable to capture the image')
             }
 
             const result = await sendFaceData(pose, imageBlob)
@@ -291,7 +289,7 @@ export default defineComponent({
             samplesCollected.value++
             currentPoseIndex.value++
             
-            showStatus(`Successfully collected  ${getPoseLabel(pose)}!`, 'success')
+            showStatus(`Successfully collected ${getPoseLabel(pose)}!`, 'success')
             
             // Log progress for debugging
             console.log('Training progress:', result.progress)
@@ -325,7 +323,7 @@ export default defineComponent({
     const finishTraining = () => {
       isTraining.value = false
       currentPose.value = null
-      showStatus('Facial data collection complete!', 'success')
+      showStatus('Facial data collection complete!!', 'success')
       
       setTimeout(() => {
         emit('completed')
@@ -357,7 +355,7 @@ export default defineComponent({
         clearTimeout(captureTimeout.value)
         captureTimeout.value = null
       }
-      showStatus('Đã dừng thu thập dữ liệu', 'info')
+      showStatus('Data collection has been stopped', 'info')
     }
 
     const closeCapture = () => {
