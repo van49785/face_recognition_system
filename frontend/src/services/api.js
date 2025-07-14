@@ -279,5 +279,18 @@ export const restoreEmployee = async (employee_id) => {
   }
 }
 
+// Gửi ảnh training (base64 hoặc blob)
+export function captureFacePose(data) {
+  return api.post('/api/face-training/capture', data, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+}
+
+
+// Lấy danh sách pose cần thiết
+export function getRequiredPoses() {
+  return Promise.resolve(['front', 'left', 'right', 'up', 'down']);
+}
+
 
 export default api

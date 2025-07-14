@@ -56,9 +56,6 @@ export const useAuthStore = defineStore('auth', () => {
       console.log('✅ Backend logout successful or not needed (no token).');
     } catch (error) {
       console.error('❌ Error during backend logout API call, but proceeding with frontend logout:', error);
-      // Xử lý lỗi API (ví dụ: hiển thị thông báo lỗi cho người dùng)
-      // Mặc dù API thất bại, chúng ta vẫn nên xóa token ở frontend để tránh trạng thái không đồng bộ
-      // và cho phép người dùng đăng nhập lại nếu muốn.
     } finally {
       // Xóa token và user khỏi Pinia store
       token.value = null;

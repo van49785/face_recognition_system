@@ -219,6 +219,14 @@ def capture_face_training_logic(image_file, base64_image, employee_id, pose_type
         return None, {"error": "Missing employee_id"}, 400
     if not image_file and not base64_image:
         return None, {"error": "No image provided"}, 400
+    if not pose_type:
+        return None, {"error": "Missing pose_type"}, 400
+
+    # Validate pose_type
+    try:
+        FaceTrainingData.validate_pose_type(pose_type)
+    except ValueError as e:
+        return None, {"error": str(e)}, 400
 
     employee = Employee.query.filter_by(employee_id=employee_id.upper()).first()
     if not employee:
@@ -243,7 +251,7 @@ def capture_face_training_logic(image_file, base64_image, employee_id, pose_type
             return None, {"error": "Failed to encode image"}, 400
         image_data = BytesIO(buf.tobytes())
     except (base64.binascii.Error, ValueError) as e:
-        return None, {"error": str(e)}, 400
+        return None, {"error": f"Image processing error: {str(e)}"}, 400
 
     # Sinh face-encoding & metadata
     success, message, encoding, metadata = (
@@ -258,10 +266,11 @@ def capture_face_training_logic(image_file, base64_image, employee_id, pose_type
         img_pil = Image.open(image_data).convert("RGB")
         save_dir = get_upload_path()
         os.makedirs(save_dir, exist_ok=True)
+        # FIX: Sửa lỗi typo employeeid -> employee_id
         save_path = os.path.join(save_dir, f"{employee_id}_{metadata['pose_type']}.jpg")
         img_pil.save(save_path, quality=90)
     except Exception as e:
-        return None, {"error": f"Save image failed: {e}"}, 500
+        return None, {"error": f"Save image failed: {str(e)}"}, 500
 
     # Ghi dữ liệu training
     try:
@@ -273,16 +282,24 @@ def capture_face_training_logic(image_file, base64_image, employee_id, pose_type
         )
         db.session.add(training_data)
 
-        if employee.get_face_training_progress()['poses_completed'] >= 3:
+        # Kiểm tra progress và update employee status
+        current_progress = employee.get_face_training_progress()
+        if current_progress['poses_completed'] >= 3:
             employee.complete_face_training()
 
         db.session.commit()
+        
+        # Refresh progress sau khi commit
+        updated_progress = employee.get_face_training_progress()
+        
     except Exception as e:
         db.session.rollback()
-        return None, {"error": f"DB error: {e}"}, 500
+        return None, {"error": f"Database error: {str(e)}"}, 500
 
     return {
+        "success": True,
         "message": "Pose captured successfully",
         "pose_type": metadata['pose_type'],
-        "progress": employee.get_face_training_progress()
+        "progress": updated_progress,
+        "employee_id": employee_id
     }, None, 200
