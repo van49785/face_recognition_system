@@ -1,6 +1,6 @@
 # backend/app/__init__.py
 
-from flask import Flask # Đảm bảo KHÔNG import send_from_directory ở đây
+from flask import Flask, send_from_directory
 from flask_cors import CORS 
 from .config import Config
 from dotenv import load_dotenv
@@ -8,6 +8,7 @@ from .db import db, migrate
 from .routes.attendance_routes import attendance_bp
 from .routes.employee_route import employee_bp
 from .routes.auth_routes import auth_bp
+from .routes.report_routes import report_bp
 from flask_jwt_extended import JWTManager
 import os
 
@@ -34,15 +35,23 @@ def create_app(config_class=Config):
     # Cấu hình CORS chi tiết hơn
     CORS(app, resources={
         r"/api/*": {"origins": ["http://localhost:3000", "http://localhost:5173"], "methods": ["GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"]},
-        r"/uploads/*": {"origins": ["http://localhost:3000", "http://localhost:5173"], "methods": ["GET", "HEAD", "OPTIONS"]} # Thêm dòng này để CORS cho ảnh
+        r"/uploads/*": {"origins": ["http://localhost:3000", "http://localhost:5173"], "methods": ["GET", "HEAD", "OPTIONS"]},
+        r"/exports/*": {"origins": ["http://localhost:3000", "http://localhost:5173"], "methods": ["GET", "HEAD", "OPTIONS"]}
     })
 
     # Đăng ký blueprints
     app.register_blueprint(attendance_bp)
-    app.register_blueprint(employee_bp) # employee_bp đã chứa route /uploads/<path:filename>
+    app.register_blueprint(employee_bp)
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
+    app.register_blueprint(report_bp)  
+
+    @app.route('/exports/<path:filename>')
+    def serve_export_file(filename):
+        # Sử dụng đường dẫn tuyệt đối thay vì tương đối
+        from .utils.helpers import get_export_path
+        export_path = get_export_path()
+        return send_from_directory(export_path, filename)
 
     from . import models  
 
     return app
-
