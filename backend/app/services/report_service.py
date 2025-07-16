@@ -1,62 +1,103 @@
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from collections import defaultdict
 import openpyxl
-from openpyxl.styles import Font, Alignment
+from openpyxl.styles import Font, Alignment, PatternFill
 import os
 from app.models.attendance import Attendance
 from app.models.employee import Employee
 from app.utils.helpers import get_vn_datetime, format_datetime_vn, get_export_path
 from sqlalchemy import and_
 
+# Company configuration rules
+COMPANY_CONFIG = {
+    'WORK_START_TIME': time(8, 0),      # 8:00 AM
+    'WORK_END_TIME': time(17, 0),       # 5:00 PM
+    'LUNCH_START': time(12, 0),         # 12:00 PM
+    'LUNCH_END': time(13, 0),           # 1:00 PM
+    'STANDARD_WORK_HOURS': 8,           # 8 hours/day
+    'LATE_THRESHOLD_MINUTES': 15,       # Late > 15 minutes
+    'EARLY_THRESHOLD_MINUTES': 15,      # Leave early > 15 minutes
+    'HALF_DAY_HOURS': 4,               # 4 hours = half day
+    'WORKING_DAYS_PER_WEEK': 5,        # 5 days/week
+}
+
+def get_working_days_between(start_date, end_date):
+    """Calculates the number of working days (Mon-Fri) within any given period."""
+    total = 0
+    for i in range((end_date - start_date).days + 1):
+        day = start_date + timedelta(days=i)
+        if day.weekday() < 5:  # 0-4 are Mon-Fri
+            total += 1
+    return total
+
 def calculate_work_hours(checkin_time, checkout_time):
-    """Tính số giờ làm việc giữa check-in và check-out"""
-    if checkin_time and checkout_time:
-        # Đảm bảo checkout_time > checkin_time
-        if checkout_time > checkin_time:
-            delta = checkout_time - checkin_time
-            return delta.total_seconds() / 3600
-        else:
-            # Trường hợp checkout_time <= checkin_time (có thể do lỗi dữ liệu)
-            return 0
-    return 0
+    """Calculates work hours, excluding lunch break."""
+    if not checkin_time or not checkout_time or checkout_time <= checkin_time:
+        return 0
+
+    total_delta = checkout_time - checkin_time
+    total_hours = total_delta.total_seconds() / 3600
+
+    lunch_start = datetime.combine(checkin_time.date(), COMPANY_CONFIG['LUNCH_START'])
+    lunch_end = datetime.combine(checkin_time.date(), COMPANY_CONFIG['LUNCH_END'])
+
+    # Subtract lunch break if working hours cover the lunch period
+    if checkin_time <= lunch_start and checkout_time >= lunch_end:
+        total_hours -= (COMPANY_CONFIG['LUNCH_END'].hour - COMPANY_CONFIG['LUNCH_START'].hour) # Subtract lunch hours (e.g., 1 hour)
+
+    return max(0, total_hours)
+
+def calculate_late_minutes(checkin_time):
+    """Calculates minutes late."""
+    if not checkin_time:
+        return 0
+    standard_time = datetime.combine(checkin_time.date(), COMPANY_CONFIG['WORK_START_TIME'])
+    return max(0, (checkin_time - standard_time).total_seconds() / 60)
+
+def calculate_early_minutes(checkout_time):
+    """Calculates minutes left early."""
+    if not checkout_time:
+        return 0
+    standard_time = datetime.combine(checkout_time.date(), COMPANY_CONFIG['WORK_END_TIME'])
+    return max(0, (standard_time - checkout_time).total_seconds() / 60)
+
+def calculate_overtime_hours(work_hours):
+    """Calculates overtime hours."""
+    return max(0, work_hours - COMPANY_CONFIG['STANDARD_WORK_HOURS'])
+
+def calculate_undertime_hours(work_hours):
+    """Calculates undertime (missing) hours."""
+    return max(0, COMPANY_CONFIG['STANDARD_WORK_HOURS'] - work_hours)
 
 def get_date_range(args):
-    """Lấy khoảng thời gian từ query params, mặc định là tháng hiện tại"""
-    start_date = args.get('start_date')
-    end_date = args.get('end_date')
+    """Gets the date range from query parameters or defaults to the current month."""
+    start_date_str = args.get('start_date')
+    end_date_str = args.get('end_date')
     vn_now = get_vn_datetime()
-    
-    # Mặc định là từ đầu tháng đến cuối tháng hiện tại
+
     default_start = vn_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    # Tìm ngày cuối tháng
+    
+    # Calculate the last day of the current month
     if vn_now.month == 12:
         next_month = vn_now.replace(year=vn_now.year + 1, month=1, day=1)
     else:
         next_month = vn_now.replace(month=vn_now.month + 1, day=1)
-    default_end = (next_month - datetime.timedelta(days=1)).replace(hour=23, minute=59, second=59, microsecond=999999)
-    
+    default_end = (next_month - timedelta(days=1)).replace(hour=23, minute=59, second=59, microsecond=999999)
+
     try:
-        if start_date:
-            start = datetime.strptime(start_date, '%Y-%m-%d').replace(hour=0, minute=0, second=0, microsecond=0)
-        else:
-            start = default_start
-            
-        if end_date:
-            end = datetime.strptime(end_date, '%Y-%m-%d').replace(hour=23, minute=59, second=59, microsecond=999999)
-        else:
-            end = default_end
-            
-        # Validate date range
+        start = datetime.strptime(start_date_str, '%Y-%m-%d').replace(hour=0, minute=0, second=0, microsecond=0) if start_date_str else default_start
+        end = datetime.strptime(end_date_str, '%Y-%m-%d').replace(hour=23, minute=59, second=59, microsecond=999999) if end_date_str else default_end
+
         if start > end:
             return None, None, {"error": "Start date must be before end date"}, 400
-            
+
     except ValueError:
         return None, None, {"error": "Invalid date format. Use YYYY-MM-DD"}, 400
-    
+
     return start, end, None, None
 
-def process_employee_attendance(employee_id, start_date, end_date):
-    """Xử lý dữ liệu chấm công của một nhân viên - hàm dùng chung"""
+def process_employee_attendance_enhanced(employee_id, start_date, end_date):
+    """Processes advanced attendance data for an employee."""
     records = Attendance.query.filter(
         and_(
             Attendance.employee_id == employee_id.upper(),
@@ -64,83 +105,149 @@ def process_employee_attendance(employee_id, start_date, end_date):
             Attendance.timestamp <= end_date
         )
     ).order_by(Attendance.timestamp.asc()).all()
-    
+
+    working_days_in_period = get_working_days_between(start_date, end_date)
+
     report = {
         "normal_days": 0,
         "late_days": 0,
         "half_days": 0,
+        "early_departure_days": 0,
+        "forgot_checkout_days": 0,
+        "absent_days": 0,
         "total_work_hours": 0,
-        "total_attendance_days": 0  # Thêm tổng số ngày có mặt
+        "total_overtime_hours": 0,
+        "total_undertime_hours": 0,
+        "total_late_minutes": 0,
+        "total_early_minutes": 0,
+        "total_attendance_days": 0,
+        "working_days_in_period": working_days_in_period,
+        "attendance_rate": 0,
+        "avg_checkin_time": None,
+        "avg_checkout_time": None,
+        "daily_records": []
     }
-    
-    daily_records = defaultdict(list)
-    
+
+    daily_grouped_records = defaultdict(list)
     for record in records:
-        day = record.timestamp.date()
-        daily_records[day].append(record)
-    
-    for day, day_records in daily_records.items():
-        # Sắp xếp theo thời gian
-        day_records.sort(key=lambda x: x.timestamp)
-        
-        checkin = next((r for r in day_records if r.status == "check-in"), None)
-        checkout = next((r for r in day_records if r.status == "check-out"), None)
-        
-        if checkin:
-            report["total_attendance_days"] += 1
-            attendance_type = checkin.attendance_type
+        daily_grouped_records[record.timestamp.date()].append(record)
+
+    checkin_times_for_avg = []
+    checkout_times_for_avg = []
+
+    current_day_iterator = start_date.date()
+    while current_day_iterator <= end_date.date():
+        day_report = {
+            "date": current_day_iterator.strftime("%Y-%m-%d"),
+            "checkin_time": None,
+            "checkout_time": None,
+            "work_hours": 0,
+            "late_minutes": 0,
+            "early_minutes": 0,
+            "overtime_hours": 0,
+            "undertime_hours": 0,
+            "attendance_type": "absent",
+            "status": "absent"
+        }
+
+        if current_day_iterator.weekday() < 5:  # Only process weekdays (Mon-Fri)
+            day_records = daily_grouped_records.get(current_day_iterator)
             
-            if attendance_type == "normal":
-                report["normal_days"] += 1
-            elif attendance_type == "late":
-                report["late_days"] += 1
-            elif attendance_type == "half_day":
-                report["half_days"] += 1
-                
-            # Tính giờ làm việc chỉ khi có cả check-in và check-out
-            if checkout:
-                work_hours = calculate_work_hours(checkin.timestamp, checkout.timestamp)
-                report["total_work_hours"] += work_hours
-    
-    # Làm tròn tổng giờ làm việc
+            if day_records:
+                day_records.sort(key=lambda x: x.timestamp)
+                checkin = next((r for r in day_records if r.status == "check-in"), None)
+                checkout = next((r for r in day_records if r.status == "check-out"), None)
+
+                if checkin:
+                    report["total_attendance_days"] += 1
+                    day_report["checkin_time"] = checkin.timestamp.strftime("%H:%M:%S")
+                    day_report["attendance_type"] = checkin.attendance_type
+                    day_report["status"] = "present"
+
+                    late_minutes = calculate_late_minutes(checkin.timestamp)
+                    day_report["late_minutes"] = round(late_minutes)
+                    report["total_late_minutes"] += round(late_minutes)
+
+                    checkin_times_for_avg.append(checkin.timestamp.time())
+
+                    if checkin.attendance_type == "normal":
+                        report["normal_days"] += 1
+                    elif checkin.attendance_type == "late":
+                        report["late_days"] += 1
+                    elif checkin.attendance_type == "half_day":
+                        report["half_days"] += 1
+
+                    if checkout:
+                        day_report["checkout_time"] = checkout.timestamp.strftime("%H:%M:%S")
+                        work_hours = calculate_work_hours(checkin.timestamp, checkout.timestamp)
+                        day_report["work_hours"] = round(work_hours, 2)
+                        report["total_work_hours"] += round(work_hours, 2)
+
+                        early_minutes = calculate_early_minutes(checkout.timestamp)
+                        day_report["early_minutes"] = round(early_minutes)
+                        report["total_early_minutes"] += round(early_minutes)
+
+                        if early_minutes > COMPANY_CONFIG['EARLY_THRESHOLD_MINUTES']:
+                            report["early_departure_days"] += 1
+
+                        overtime = calculate_overtime_hours(work_hours)
+                        undertime = calculate_undertime_hours(work_hours)
+                        day_report["overtime_hours"] = round(overtime, 2)
+                        day_report["undertime_hours"] = round(undertime, 2)
+                        report["total_overtime_hours"] += round(overtime, 2)
+                        report["total_undertime_hours"] += round(undertime, 2)
+
+                        checkout_times_for_avg.append(checkout.timestamp.time())
+                    else:
+                        report["forgot_checkout_days"] += 1
+                        # If forgotten check-out, still count missing hours for that day
+                        day_report["undertime_hours"] = round(COMPANY_CONFIG['STANDARD_WORK_HOURS'], 2)
+                        report["total_undertime_hours"] += round(COMPANY_CONFIG['STANDARD_WORK_HOURS'], 2)
+                else:
+                    # No check-in for the workday => absent
+                    report["absent_days"] += 1
+                    day_report["undertime_hours"] = round(COMPANY_CONFIG['STANDARD_WORK_HOURS'], 2)
+                    report["total_undertime_hours"] += round(COMPANY_CONFIG['STANDARD_WORK_HOURS'], 2)
+            else:
+                # No records for this workday => absent
+                report["absent_days"] += 1
+                day_report["undertime_hours"] = round(COMPANY_CONFIG['STANDARD_WORK_HOURS'], 2)
+                report["total_undertime_hours"] += round(COMPANY_CONFIG['STANDARD_WORK_HOURS'], 2)
+        
+        report["daily_records"].append(day_report)
+        current_day_iterator += timedelta(days=1)
+
+    # Calculate attendance rate
+    report["attendance_rate"] = (report["total_attendance_days"] / working_days_in_period * 100) if working_days_in_period > 0 else 0
+
+    # Calculate average times
+    if checkin_times_for_avg:
+        avg_checkin_seconds = sum(t.hour * 3600 + t.minute * 60 + t.second for t in checkin_times_for_avg) / len(checkin_times_for_avg)
+        report["avg_checkin_time"] = str(timedelta(seconds=int(avg_checkin_seconds)))
+
+    if checkout_times_for_avg:
+        avg_checkout_seconds = sum(t.hour * 3600 + t.minute * 60 + t.second for t in checkout_times_for_avg) / len(checkout_times_for_avg)
+        report["avg_checkout_time"] = str(timedelta(seconds=int(avg_checkout_seconds)))
+
+    # Round total values
     report["total_work_hours"] = round(report["total_work_hours"], 2)
-    
+    report["total_overtime_hours"] = round(report["total_overtime_hours"], 2)
+    report["total_undertime_hours"] = round(report["total_undertime_hours"], 2)
+    report["attendance_rate"] = round(report["attendance_rate"], 2)
+
     return report
 
-def get_employee_report(employee_id, start_date, end_date):
-    """Lấy báo cáo chấm công của một nhân viên"""
+def get_employee_report_enhanced(employee_id, start_date, end_date):
+    """Generates an enhanced employee attendance report."""
     employee = Employee.query.filter_by(employee_id=employee_id.upper()).first()
     if not employee:
         return None, {"error": "Employee not found"}, 404
-    
-    # Kiểm tra nhân viên có active không
+
     if not employee.status:
         return None, {"error": "Employee is inactive"}, 400
-    
-    records = Attendance.query.filter(
-        and_(
-            Attendance.employee_id == employee_id.upper(),
-            Attendance.timestamp >= start_date,
-            Attendance.timestamp <= end_date
-        )
-    ).order_by(Attendance.timestamp.asc()).all()
-    
-    report = process_employee_attendance(employee_id, start_date, end_date)
-    
-    # Thêm chi tiết từng bản ghi
-    detailed_records = []
-    for record in records:
-        detailed_records.append({
-            "date": record.timestamp.strftime("%Y-%m-%d"),
-            "time": record.timestamp.strftime("%H:%M:%S"),
-            "status": record.status,
-            "attendance_type": record.attendance_type,
-            "timestamp": format_datetime_vn(record.timestamp),
-            "location": record.location
-        })
-    
-    report["records"] = detailed_records
-    
+
+    report = process_employee_attendance_enhanced(employee_id, start_date, end_date)
+
     return {
         "employee": {
             "employee_id": employee.employee_id,
@@ -155,42 +262,62 @@ def get_employee_report(employee_id, start_date, end_date):
         }
     }, None, None
 
-def get_department_report(department, start_date, end_date):
-    """Lấy báo cáo chấm công của một phòng ban"""
+def get_department_report_enhanced(department, start_date, end_date):
+    """Generates an enhanced department attendance report."""
     employees = Employee.query.filter_by(department=department, status=True).all()
     if not employees:
         return None, {"error": "No active employees found in this department"}, 404
-    
+
     total_report = {
         "total_normal_days": 0,
         "total_late_days": 0,
         "total_half_days": 0,
+        "total_early_departure_days": 0,
+        "total_forgot_checkout_days": 0,
+        "total_absent_days": 0,
         "total_work_hours": 0,
+        "total_overtime_hours": 0,
+        "total_undertime_hours": 0,
         "total_attendance_days": 0,
+        "avg_attendance_rate": 0,
         "employee_reports": []
     }
-    
+
+    attendance_rates = []
+
     for employee in employees:
-        employee_report = process_employee_attendance(employee.employee_id, start_date, end_date)
-        
+        employee_report = process_employee_attendance_enhanced(employee.employee_id, start_date, end_date)
+
         employee_data = {
             "employee_id": employee.employee_id,
             "full_name": employee.full_name,
             "position": employee.position,
             **employee_report
         }
-        
+
         total_report["employee_reports"].append(employee_data)
-        
-        # Cộng dồn vào tổng
+        attendance_rates.append(employee_report["attendance_rate"])
+
+        # Accumulate totals
         total_report["total_normal_days"] += employee_report["normal_days"]
         total_report["total_late_days"] += employee_report["late_days"]
         total_report["total_half_days"] += employee_report["half_days"]
+        total_report["total_early_departure_days"] += employee_report["early_departure_days"]
+        total_report["total_forgot_checkout_days"] += employee_report["forgot_checkout_days"]
+        total_report["total_absent_days"] += employee_report["absent_days"]
         total_report["total_work_hours"] += employee_report["total_work_hours"]
+        total_report["total_overtime_hours"] += employee_report["total_overtime_hours"]
+        total_report["total_undertime_hours"] += employee_report["total_undertime_hours"]
         total_report["total_attendance_days"] += employee_report["total_attendance_days"]
-    
+
+    # Calculate average attendance rate
+    total_report["avg_attendance_rate"] = round(sum(attendance_rates) / len(attendance_rates), 2) if attendance_rates else 0
+
+    # Round totals
     total_report["total_work_hours"] = round(total_report["total_work_hours"], 2)
-    
+    total_report["total_overtime_hours"] = round(total_report["total_overtime_hours"], 2)
+    total_report["total_undertime_hours"] = round(total_report["total_undertime_hours"], 2)
+
     return {
         "department": department,
         "total_employees": len(employees),
@@ -201,201 +328,207 @@ def get_department_report(department, start_date, end_date):
         }
     }, None, None
 
-def get_company_report(start_date, end_date):
-    """Lấy báo cáo chấm công toàn công ty"""
-    employees = Employee.query.filter_by(status=True).all()
-    if not employees:
-        return None, {"error": "No active employees found"}, 404
-    
-    company_report = {
-        "total_normal_days": 0,
-        "total_late_days": 0,
-        "total_half_days": 0,
-        "total_work_hours": 0,
-        "total_attendance_days": 0,
-        "department_reports": defaultdict(lambda: {
-            "normal_days": 0,
-            "late_days": 0,
-            "half_days": 0,
-            "total_work_hours": 0,
-            "total_attendance_days": 0,
-            "employee_count": 0
-        })
-    }
-    
-    for employee in employees:
-        employee_report = process_employee_attendance(employee.employee_id, start_date, end_date)
-        
-        # Cộng dồn vào tổng công ty
-        company_report["total_normal_days"] += employee_report["normal_days"]
-        company_report["total_late_days"] += employee_report["late_days"]
-        company_report["total_half_days"] += employee_report["half_days"]
-        company_report["total_work_hours"] += employee_report["total_work_hours"]
-        company_report["total_attendance_days"] += employee_report["total_attendance_days"]
-        
-        # Cộng dồn vào phòng ban
-        dept_report = company_report["department_reports"][employee.department]
-        dept_report["normal_days"] += employee_report["normal_days"]
-        dept_report["late_days"] += employee_report["late_days"]
-        dept_report["half_days"] += employee_report["half_days"]
-        dept_report["total_work_hours"] += employee_report["total_work_hours"]
-        dept_report["total_attendance_days"] += employee_report["total_attendance_days"]
-        dept_report["employee_count"] += 1
-    
-    company_report["total_work_hours"] = round(company_report["total_work_hours"], 2)
-    
-    # Chuyển đổi department_reports thành list
-    department_reports = []
-    for dept, stats in company_report["department_reports"].items():
-        stats["total_work_hours"] = round(stats["total_work_hours"], 2)
-        department_reports.append({"department": dept, **stats})
-    
-    return {
-        "report": {
-            "total_employees": len(employees),
-            "total_normal_days": company_report["total_normal_days"],
-            "total_late_days": company_report["total_late_days"],
-            "total_half_days": company_report["total_half_days"],
-            "total_work_hours": company_report["total_work_hours"],
-            "total_attendance_days": company_report["total_attendance_days"],
-            "department_reports": department_reports
-        },
-        "period": {
-            "start_date": format_datetime_vn(start_date),
-            "end_date": format_datetime_vn(end_date)
-        }
-    }, None, None
-
-def export_to_excel(report_type, start_date, end_date):
-    """Xuất báo cáo ra file Excel"""
-    data = []
-    
+def export_to_excel_enhanced(report_type, start_date, end_date):
+    """Exports enhanced attendance reports to Excel."""
     try:
-        if report_type.startswith('employee/'):
-            employee_id = report_type.split('/')[1].upper()
-            employee = Employee.query.filter_by(employee_id=employee_id).first()
-            if not employee:
-                return None, {"error": "Employee not found"}, 404
-            
-            if not employee.status:
-                return None, {"error": "Employee is inactive"}, 400
-            
-            report = process_employee_attendance(employee_id, start_date, end_date)
-            
-            data.append({
-                "Mã nhân viên": employee.employee_id,
-                "Họ tên": employee.full_name,
-                "Phòng ban": employee.department,
-                "Chức vụ": employee.position,
-                "Ngày công chuẩn": report["normal_days"],
-                "Ngày đi muộn": report["late_days"],
-                "Ngày nửa công": report["half_days"],
-                "Tổng ngày có mặt": report["total_attendance_days"],
-                "Tổng giờ làm việc": report["total_work_hours"]
-            })
-        
-        elif report_type.startswith('department/'):
-            department = report_type.split('/')[1]
-            employees = Employee.query.filter_by(department=department, status=True).all()
-            if not employees:
-                return None, {"error": "No active employees found in this department"}, 404
-            
-            for employee in employees:
-                report = process_employee_attendance(employee.employee_id, start_date, end_date)
-                
-                data.append({
-                    "Mã nhân viên": employee.employee_id,
-                    "Họ tên": employee.full_name,
-                    "Phòng ban": employee.department,
-                    "Chức vụ": employee.position,
-                    "Ngày công chuẩn": report["normal_days"],
-                    "Ngày đi muộn": report["late_days"],
-                    "Ngày nửa công": report["half_days"],
-                    "Tổng ngày có mặt": report["total_attendance_days"],
-                    "Tổng giờ làm việc": report["total_work_hours"]
-                })
-        
-        elif report_type == 'company':
-            employees = Employee.query.filter_by(status=True).all()
-            if not employees:
-                return None, {"error": "No active employees found"}, 404
-            
-            for employee in employees:
-                report = process_employee_attendance(employee.employee_id, start_date, end_date)
-                
-                data.append({
-                    "Mã nhân viên": employee.employee_id,
-                    "Họ tên": employee.full_name,
-                    "Phòng ban": employee.department,
-                    "Chức vụ": employee.position,
-                    "Ngày công chuẩn": report["normal_days"],
-                    "Ngày đi muộn": report["late_days"],
-                    "Ngày nửa công": report["half_days"],
-                    "Tổng ngày có mặt": report["total_attendance_days"],
-                    "Tổng giờ làm việc": report["total_work_hours"]
-                })
-        
-        else:
-            return None, {"error": "Invalid report type. Use 'employee/<employee_id>', 'department/<department>', or 'company'"}, 400
-        
-        # Tạo file Excel
+        if not report_type or '/' not in report_type:
+            return None, {"error": "Invalid report type format. Use 'employee/{id}' or 'department/{name}'"}, 400
+
+        report_category, identifier = report_type.split('/', 1)
+
         wb = openpyxl.Workbook()
         ws = wb.active
-        ws.title = "Báo cáo chấm công"
+        ws.title = "Attendance Report"
+
+        header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+        header_font = Font(color="FFFFFF", bold=True)
+        center_align = Alignment(horizontal="center", vertical="center")
         
-        # Thêm tiêu đề
-        title_row = [f"BÁO CÁO CHẤM CÔNG - {format_datetime_vn(start_date)} đến {format_datetime_vn(end_date)}"]
-        ws.append(title_row)
-        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=9)
-        ws['A1'].font = Font(bold=True, size=14)
-        ws['A1'].alignment = Alignment(horizontal="center")
-        
-        # Thêm hàng trống
-        ws.append([])
-        
-        # Headers
-        headers = ["Mã nhân viên", "Họ tên", "Phòng ban", "Chức vụ", "Ngày công chuẩn", "Ngày đi muộn", "Ngày nửa công", "Tổng ngày có mặt", "Tổng giờ làm việc"]
-        ws.append(headers)
-        
-        # Style headers
-        for cell in ws[3]:
-            cell.font = Font(bold=True)
-            cell.alignment = Alignment(horizontal="center")
-        
-        # Thêm dữ liệu
-        for row_data in data:
-            ws.append([
-                row_data["Mã nhân viên"],
-                row_data["Họ tên"],
-                row_data["Phòng ban"],
-                row_data["Chức vụ"],
-                row_data["Ngày công chuẩn"],
-                row_data["Ngày đi muộn"],
-                row_data["Ngày nửa công"],
-                row_data["Tổng ngày có mặt"],
-                row_data["Tổng giờ làm việc"]
-            ])
-        
-        # Auto-adjust column widths
-        for col in ws.columns:
-            max_length = 0
-            column = col[0].column_letter
-            for cell in col:
-                try:
-                    if len(str(cell.value)) > max_length:
-                        max_length = len(str(cell.value))
-                except:
-                    pass
-            adjusted_width = min(max_length + 2, 50)  # Giới hạn width tối đa
-            ws.column_dimensions[column].width = adjusted_width
-        
-        # Tạo filename và save
+        # Helper function to set header style
+        def set_header_style(row_cells):
+            for cell in row_cells:
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.alignment = center_align
+
+        title_text = f"ATTENDANCE REPORT - {start_date.strftime('%d/%m/%Y')} to {end_date.strftime('%d/%m/%Y')}"
+
+        if report_category == 'employee':
+            employee_id = identifier.upper()
+            employee = Employee.query.filter_by(employee_id=employee_id).first()
+            if not employee:
+                return None, {"error": f"Employee {employee_id} not found"}, 404
+            if not employee.status:
+                return None, {"error": f"Employee {employee_id} is inactive"}, 400
+
+            report_data = process_employee_attendance_enhanced(employee_id, start_date, end_date)
+
+            ws.append([f"{title_text} - {employee.full_name} ({employee.employee_id})"])
+            ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=12)
+            ws['A1'].font = Font(bold=True, size=16)
+            ws['A1'].alignment = center_align
+
+            ws.append([]) # Blank row
+
+            ws.append([f"Department: {employee.department or 'N/A'}", "", f"Position: {employee.position or 'N/A'}"])
+            ws.merge_cells(start_row=3, start_column=1, end_row=3, end_column=6)
+            ws.merge_cells(start_row=3, start_column=7, end_row=3, end_column=12)
+
+            ws.append([]) # Blank row
+            ws.append(["ATTENDANCE OVERVIEW"])
+            ws['A5'].font = Font(bold=True, size=12)
+
+            summary_data = [
+                ["Total Working Days", report_data["working_days_in_period"]],
+                ["Attendance Days", report_data["total_attendance_days"]],
+                ["Absence Days", report_data["absent_days"]],
+                ["Attendance Rate", f"{report_data['attendance_rate']}%"],
+                ["Total Working Hours", f"{report_data['total_work_hours']} hours"],
+                ["Total Overtime Hours", f"{report_data['total_overtime_hours']} hours"],
+                ["Total Missing Hours", f"{report_data['total_undertime_hours']} hours"],
+                ["Late days", report_data["late_days"]],
+                ["Early Departure Days", report_data["early_departure_days"]],
+                ["Forgot checkout days:", report_data["forgot_checkout_days"]]
+            ]
+
+            for row_data in summary_data:
+                ws.append(row_data)
+
+            ws.append([])
+            ws.append([])
+
+            ws.append(["DAILY ATTENDANCE DETAILS"])
+            ws[f'A{ws.max_row}'].font = Font(bold=True, size=12)
+            ws.append([])
+
+            detail_headers = [
+                "Date", "Day of Week", "Check-in Time", "Check-out Time", "Working Hours",
+                "Late Arrival (mins)", "Early Leave (mins)", "Overtime (hrs)", "Missing Hours (hrs)",
+                "Day Type", "Status", "Notes"
+            ]
+            ws.append(detail_headers)
+            set_header_style(ws[ws.max_row])
+
+            weekday_names_en = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+            for daily_record in report_data["daily_records"]:
+                current_date = datetime.strptime(daily_record["date"], "%Y-%m-%d").date()
+                weekday_name = weekday_names_en[current_date.weekday()]
+
+                notes = []
+                if daily_record["status"] == "absent":
+                    notes.append("Absent")
+                else:
+                    if daily_record["late_minutes"] > COMPANY_CONFIG['LATE_THRESHOLD_MINUTES']:
+                        notes.append("Late")
+                    if daily_record["early_minutes"] > COMPANY_CONFIG['EARLY_THRESHOLD_MINUTES']:
+                        notes.append("Early Departure")
+                    if not daily_record["checkout_time"]:
+                        notes.append("Forgot Check-out")
+                    if daily_record["attendance_type"] == "half_day":
+                        notes.append("Half Day")
+                
+                note_text = ", ".join(notes) if notes else "Normal"
+
+                row_data = [
+                    current_date.strftime("%d/%m/%Y"),
+                    weekday_name,
+                    daily_record["checkin_time"] or "N/A",
+                    daily_record["checkout_time"] or "N/A",
+                    f"{daily_record['work_hours']:.1f}" if daily_record['work_hours'] > 0 else "0",
+                    f"{daily_record['late_minutes']:.0f}" if daily_record['late_minutes'] > 0 else "0",
+                    f"{daily_record['early_minutes']:.0f}" if daily_record['early_minutes'] > 0 else "0",
+                    f"{daily_record['overtime_hours']:.1f}" if daily_record['overtime_hours'] > 0 else "0",
+                    f"{daily_record['undertime_hours']:.1f}" if daily_record['undertime_hours'] > 0 else "0",
+                    daily_record['attendance_type'].replace("_", " ").title(),
+                    daily_record['status'].title(),
+                    note_text
+                ]
+                ws.append(row_data)
+
+            column_widths = [12, 10, 12, 12, 12, 14, 14, 12, 12, 12, 10, 20]
+            for i, width in enumerate(column_widths, 1):
+                ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = width
+
+        elif report_category == 'department':
+            department_name = identifier
+            employees = Employee.query.filter_by(department=department_name, status=True).all()
+            if not employees:
+                return None, {"error": f"No active employees found in department: {department_name}"}, 404
+
+            ws.append([f"{title_text} - DEPARTMENT: {department_name}"])
+            ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=14)
+            ws['A1'].font = Font(bold=True, size=16)
+            ws['A1'].alignment = center_align
+
+            ws.append([]) # Blank row
+
+            department_headers = [
+                "Employee ID", "Full Name", "Position", "Normal Days", "Late Days", "Half Days", "Early Leaves",
+                "Forgot Check-outs", "Absent Days", "Total Hours", "Overtime Hours", "Missing Hours",
+                "Attendance Rate (%)", "Evaluation"
+            ]
+            ws.append(department_headers)
+            set_header_style(ws[ws.max_row])
+
+            for employee in employees:
+                report_data = process_employee_attendance_enhanced(employee.employee_id, start_date, end_date)
+                
+                evaluation = []
+                if report_data["attendance_rate"] < 80:
+                    evaluation.append("Poor Attendance")
+                if report_data["late_days"] > 5:
+                    evaluation.append("Frequently Late")
+                if report_data["early_departure_days"] > 3:
+                    evaluation.append("Frequently Leaves Early")
+                
+                evaluation_text = ", ".join(evaluation) if evaluation else "Good"
+
+                row_data = [
+                    employee.employee_id,
+                    employee.full_name,
+                    employee.position or "N/A",
+                    report_data["normal_days"],
+                    report_data["late_days"],
+                    report_data["half_days"],
+                    report_data["early_departure_days"],
+                    report_data["forgot_checkout_days"],
+                    report_data["absent_days"],
+                    f"{report_data['total_work_hours']:.1f}",
+                    f"{report_data['total_overtime_hours']:.1f}",
+                    f"{report_data['total_undertime_hours']:.1f}",
+                    f"{report_data['attendance_rate']:.1f}%",
+                    evaluation_text
+                ]
+                ws.append(row_data)
+
+            column_widths = [10, 25, 15, 15, 12, 15, 15, 18, 12, 12, 12, 12, 18, 25]
+            for i, width in enumerate(column_widths, 1):
+                ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = width
+        else:
+            return None, {"error": f"Invalid report category: {report_category}. Use 'employee' or 'department'"}, 400
+
+        export_path = get_export_path()
+        os.makedirs(export_path, exist_ok=True)
+
         timestamp = get_vn_datetime().strftime("%Y%m%d_%H%M%S")
-        filename = f"report_{report_type.replace('/', '_')}_{timestamp}.xlsx"
-        filepath = os.path.join(get_export_path(), filename)
+        safe_identifier = identifier.replace('/', '_').replace('\\', '_')
+        filename = f"attendance_report_{report_category}_{safe_identifier}_{timestamp}.xlsx"
+        filepath = os.path.join(export_path, filename)
+
         wb.save(filepath)
-        
-        return {"message": "Report exported successfully", "download_url": f"/Exports/{filename}", "filename": filename}, None, None
-    
+
+        if not os.path.exists(filepath) or os.path.getsize(filepath) == 0:
+            return None, {"error": "Failed to create or created file is empty"}, 500
+
+        return {
+            "message": "Report exported successfully",
+            "download_url": f"/api/reports/download/{filename}",
+            "filename": filename,
+            "file_path": filepath,
+            "file_size": os.path.getsize(filepath),
+            "report_type": report_category
+        }, None, None
+
     except Exception as e:
         return None, {"error": f"Export failed: {str(e)}"}, 500

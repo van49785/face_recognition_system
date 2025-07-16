@@ -1,21 +1,12 @@
-# FacialRecognitionService – revised
-# -------------------------------------------------
-# • Uses dlib shape predictor (68 landmarks) for reliable liveness checks.
-# • Handles both file uploads (bytes) and base64 strings.
-# • Unified helper for extracting landmarks, no KeyError anymore.
-# • NEW: Implements passive liveness detection over a sequence of frames.
 
-# === Standard library ===
 import os
 import math
 import random
 import base64
-import time # Thêm import time để quản lý thời gian phiên
 from io import BytesIO
 from PIL import Image
-from datetime import datetime, timedelta # Thêm timedelta để quản lý thời gian phiên
+from datetime import datetime, timedelta 
 
-# === Third‑party libs ===
 import cv2
 import dlib
 import numpy as np
@@ -200,12 +191,12 @@ class FacialRecognitionService:
             # Nếu ánh sáng yếu, xóa phiên và báo lỗi
             if session_id in LIVENESS_SESSIONS:
                 del LIVENESS_SESSIONS[session_id]
-            return False,"Ánh sáng quá yếu, vui lòng thử lại ở nơi sáng hơn."
+            return False,"The lighting is too dim, please try again in a brighter location."
 
         # 4. Trích xuất landmarks và kiểm tra phát hiện khuôn mặt
         landmarks = _extract_landmarks(img)
         if landmarks is None:
-            return False,"Không thể phát hiện khuôn mặt, vui lòng nhìn thẳng vào camera."
+            return False,"Unable to detect the face, please look directly into the camera."
 
         # 5. Thêm dữ liệu khung hình hiện tại vào phiên
         session_data['frames_data'].append({
@@ -246,11 +237,11 @@ class FacialRecognitionService:
                 # Nếu hết 5 giây mà không phát hiện, coi là thất bại
                 if (current_time - session_data['frames_data'][0]['timestamp']).total_seconds() > SESSION_TIMEOUT_SECONDS:
                     del LIVENESS_SESSIONS[session_id] # Xóa phiên
-                    return False, "Không phát hiện hành động sự sống. Vui lòng thử lại và thực hiện chớp mắt hoặc cười."
-                return False, "Đang kiểm tra sự sống. Vui lòng giữ khuôn mặt rõ ràng và chớp mắt hoặc cười."
+                    return False, "No liveness action detected. Please try again and perform a blink or smile."
+                return False, "Checking for liveness. Please keep your face clear and blink or smile."
         
         # Nếu liveness đã được xác nhận trong phiên này
-        return True, "Kiểm tra sự sống thành công."
+        return True, "Liveness check successful."
 
     # ---------- Recognition ----------
     @staticmethod

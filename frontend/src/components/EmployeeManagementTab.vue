@@ -1,4 +1,3 @@
-<!-- src/components/EmployeeManagementTab.vue -->
 <template>
   <div class="employee-management-content">
     <div class="d-flex align-center justify-space-between mb-4">
@@ -22,6 +21,7 @@
         hide-details
         class="mb-4"
         @input="debouncedSearch"
+        @click:clear="onSearchClear"
       ></v-text-field>
 
       <v-data-table-server
@@ -107,8 +107,8 @@
           {{ isEditing ? 'Edit Employee Information' : 'Add New Employee' }}
         </v-card-title>
         <v-card-text class="pt-4 pb-0">
-          <p class="text-center text-medium-emphasis text-body-2">
-            The employee creation/edit form will be placed here...
+          <p class="text-center text-medium-emphasis text-body-2" v-if="!isEditing">
+            Please fill in the employee information. Afterward, you will collect the facial data.
           </p>
           <v-container>
             <v-row>
@@ -118,8 +118,9 @@
                   variant="outlined"
                   density="compact"
                   required
-                  :readonly="isEditing"
+                  :readonly="isEditing && !canEditIdInDialog"
                   v-model="editedEmployee.employee_id"
+                  :rules="[v => !!v || 'Employee ID is required']"
                 ></v-text-field>
               </v-col>
               <v-col cols="12" md="6">
@@ -129,6 +130,7 @@
                   density="compact"
                   required
                   v-model="editedEmployee.full_name"
+                  :rules="[v => !!v || 'Full Name is required']"
                 ></v-text-field>
               </v-col>
               <v-col cols="12" md="6">
@@ -164,25 +166,50 @@
                   v-model="editedEmployee.position"
                 ></v-text-field>
               </v-col>
-              <v-col cols="12" v-if="isEditing">
+              <v-col cols="12">
                 <v-switch
                   v-model="editedEmployee.status"
                   color="primary"
                   :label="editedEmployee.status ? 'Status: Active' : 'Status: Deleted'"
                   hide-details
+                  v-if="isEditing"
                 ></v-switch>
+              </v-col>
+              <v-col cols="12" v-if="isEditing">
+                <v-btn
+                  color="info"
+                  prepend-icon="mdi-face-recognition"
+                  @click="openFaceCaptureForEdit"
+                  :disabled="!editedEmployee.employee_id"
+                  class="mt-4"
+                >
+                  Train/Retrain Face Data
+                </v-btn>
               </v-col>
             </v-row>
           </v-container>
         </v-card-text>
         <v-card-actions class="pa-4 pt-0 justify-end">
           <v-btn color="grey-darken-2" variant="text" @click="closeEmployeeDialog">Cancel</v-btn>
-          <v-btn color="primary" variant="flat" @click="saveEmployee">
-            {{ isEditing ? 'Update' : 'Add New' }}
+          <v-btn
+            color="primary"
+            variant="flat"
+            @click="saveEmployee"
+            :disabled="loading"
+          >
+            {{ isEditing ? 'Update Employee' : 'Add New Employee' }}
           </v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <FaceCapture
+      v-if="showFaceCaptureDialog && employeeIdForFaceCapture"
+      :userId="employeeIdForFaceCapture"
+      :isNewAddition="isNewEmployeeBeingCaptured" 
+      @completed="onFaceCaptureCompleted"
+      @cancelled="onFaceCaptureCancelled"
+    />
 
     <v-dialog v-model="confirmDialog" max-width="500px">
       <v-card rounded="lg">
@@ -227,83 +254,79 @@
 
 <script>
 import '@/assets/css/EmployeeManagementTab.css';
-import { defineComponent, ref, onMounted, watch } from 'vue';
-import { getEmployees, deleteEmployee, restoreEmployee, addEmployee, updateEmployee } from '../services/api';
+import { defineComponent, ref, onMounted, watch } from 'vue'; // Thêm watch vào import
+import {
+  getEmployees, deleteEmployee, restoreEmployee, addEmployee, updateEmployee
+} from '../services/api';
 import defaultAvatar from '../assets/image/user_placeholder.png';
+import FaceCapture from './FaceCapture.vue';
 
 export default defineComponent({
   name: 'EmployeeManagementTab',
+  components: { FaceCapture },
   setup() {
     const employees = ref([]);
     const totalEmployees = ref(0);
     const loading = ref(true);
     const searchQuery = ref('');
-    const options = ref({
-      page: 1,
-      itemsPerPage: 10,
-      sortBy: [],
-      groupBy: [],
-      search: undefined,
-    });
+    const options = ref({ page: 1, itemsPerPage: 10, sortBy: [], groupBy: [] });
 
     const employeeDialog = ref(false);
     const isEditing = ref(false);
     const editedEmployee = ref({});
     const defaultEmployee = {
-      employee_id: '',
-      full_name: '',
-      email: '',
-      phone: '',
-      department: '',
-      position: '',
-      status: true,
+      employee_id: '', full_name: '', email: '', phone: '',
+      department: '', position: '', status: true
     };
 
     const confirmDialog = ref(false);
     const selectedEmployee = ref(null);
     const actionType = ref('');
-
-    const snackbar = ref({
-      show: false,
-      message: '',
-      color: '',
-    });
-
+    const snackbar = ref({ show: false, message: '', color: '' });
     const headers = ref([
       { title: 'ID', key: 'employee_id', sortable: true },
-      { title: 'Full Name', key: 'full_name', sortable: true },
-      { title: 'Department', key: 'department', sortable: true },
-      { title: 'Email', key: 'email', sortable: true },
-      { title: 'Ststus', key: 'status', sortable: true },
+      { title: 'Full Name', key: 'full_name' },
+      { title: 'Department', key: 'department' },
+      { title: 'Email', key: 'email' },
+      { title: 'Status', key: 'status' },
       { title: 'Actions', key: 'actions', sortable: false, align: 'center' },
     ]);
 
+    // Face capture related
+    const employeeIdForFaceCapture = ref(null);
+    const isNewEmployeeBeingCaptured = ref(false);
+    const showFaceCaptureDialog = ref(false);
+    const canEditIdInDialog = ref(false);
+
+    // Debounce search input
+    let searchTimeout = null;
+
+    // Function to fetch employees
     const fetchEmployees = async () => {
       loading.value = true;
       try {
         const { page, itemsPerPage, sortBy } = options.value;
-        const sortField = sortBy.length > 0 ? sortBy[0].key : 'created_at';
-        const sortOrder = sortBy.length > 0 && sortBy[0].order === 'desc' ? 'desc' : 'desc';
-
-        const params = {
-          page,
-          limit: itemsPerPage,
-          sort_by: sortField,
-          sort_order: sortOrder
-        };
-
-        if (searchQuery.value) {
-          params.search = searchQuery.value;
-        }
-
-        const response = await getEmployees(params);
+        const sortField = sortBy[0]?.key || 'created_at';
+        const sortOrder = sortBy[0]?.order === 'desc' ? 'desc' : 'desc';
         
+        const params = { 
+          page, 
+          limit: itemsPerPage, 
+          sort_by: sortField, 
+          sort_order: sortOrder 
+        };
+        
+        // Thêm search parameter nếu có
+        if (searchQuery.value && searchQuery.value.trim()) {
+          params.search = searchQuery.value.trim();
+        }
+        
+        const response = await getEmployees(params);
         employees.value = response.employees || [];
         totalEmployees.value = response.total || 0;
-
       } catch (error) {
         console.error('Error fetching employees:', error);
-        showSnackbar('An error occurred while loading the employee list.', 'error');
+        showSnackbar('Error loading employee list', 'error');
         employees.value = [];
         totalEmployees.value = 0;
       } finally {
@@ -311,209 +334,173 @@ export default defineComponent({
       }
     };
 
+    // Debounced search function
+    const debouncedSearch = () => {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(() => {
+        // Reset về trang đầu khi search
+        options.value.page = 1;
+        fetchEmployees();
+      }, 300); // Giảm xuống 300ms cho responsive hơn
+    };
+
+    // Handle search clear
+    const onSearchClear = () => {
+      searchQuery.value = '';
+      options.value.page = 1;
+      fetchEmployees();
+    };
+
+    // Watch searchQuery for changes
+    watch(searchQuery, (newValue) => {
+      if (!newValue || newValue.trim() === '') {
+        // Nếu search query rỗng, reset về trang đầu và fetch lại
+        options.value.page = 1;
+        fetchEmployees();
+      }
+    });
+
     const updateOptions = (newOptions) => {
-      // Chỉ gọi API nếu thực sự có thay đổi
       if (JSON.stringify(options.value) !== JSON.stringify(newOptions)) {
         options.value = { ...newOptions };
         fetchEmployees();
       }
     };
 
-    let searchTimeout = null;
-    const debouncedSearch = () => {
-      if (searchTimeout) clearTimeout(searchTimeout);
-      searchTimeout = setTimeout(fetchEmployees, 300);
-    };
-
     const openAddEmployeeDialog = () => {
       isEditing.value = false;
+      employeeIdForFaceCapture.value = null;
+      isNewEmployeeBeingCaptured.value = false;
       editedEmployee.value = { ...defaultEmployee };
       employeeDialog.value = true;
     };
 
-    const openEditEmployeeDialog = (employee) => {
+    const openEditEmployeeDialog = (emp) => {
       isEditing.value = true;
-      editedEmployee.value = { ...employee };
+      employeeIdForFaceCapture.value = null;
+      isNewEmployeeBeingCaptured.value = false;
+      editedEmployee.value = { ...emp };
       employeeDialog.value = true;
     };
 
     const closeEmployeeDialog = () => {
       employeeDialog.value = false;
       editedEmployee.value = {};
+      employeeIdForFaceCapture.value = null;
+      isNewEmployeeBeingCaptured.value = false;
     };
 
     const saveEmployee = async () => {
       if (!editedEmployee.value.employee_id || !editedEmployee.value.full_name || !editedEmployee.value.department) {
-        showSnackbar('Please fill in all required fields (Employee ID, Full Name, Department).', 'warning');
-        return;
+        return showSnackbar('Missing required fields', 'warning');
       }
-
+      loading.value = true;
       try {
         const formData = new FormData();
-        
-        // Thêm các trường dữ liệu
         Object.keys(editedEmployee.value).forEach(key => {
-          if (editedEmployee.value[key] !== null && editedEmployee.value[key] !== undefined) {
+          if (editedEmployee.value[key] !== null) {
             formData.append(key, editedEmployee.value[key]);
           }
         });
 
         if (isEditing.value) {
           await updateEmployee(editedEmployee.value.employee_id, formData);
-          showSnackbar('Employee Updated Successfully!', 'success');
+          showSnackbar('Employee updated', 'success');
+          closeEmployeeDialog();
         } else {
-          await addEmployee(formData);
-          showSnackbar('New employee has been added successfully. (Facial recognition training is required)', 'success');
+          const res = await addEmployee(formData);
+          const newId = res.employee_id || res.id || editedEmployee.value.employee_id;
+          editedEmployee.value.employee_id = newId;
+          showSnackbar('Employee added successfully. You can now proceed to train the face.', 'success');
+          
+          employeeIdForFaceCapture.value = newId;
+          isNewEmployeeBeingCaptured.value = true;
+          employeeDialog.value = false;
+          showFaceCaptureDialog.value = true;
         }
-        closeEmployeeDialog();
         fetchEmployees();
       } catch (error) {
-        console.error('Error saving employee:', error);
-        showSnackbar(`Error when ${isEditing.value ? 'update' : 'add'} employee: ${error.response?.data?.error || error.message}`, 'error');
+        showSnackbar('Error saving employee: ' + (error.message || 'Unknown'), 'error');
+      } finally {
+        loading.value = false;
       }
     };
 
-    const confirmSoftDelete = (employee) => {
-      selectedEmployee.value = employee;
-      actionType.value = 'delete';
-      confirmDialog.value = true;
+    const openFaceCaptureForEdit = () => {
+      if (editedEmployee.value.employee_id) {
+        employeeIdForFaceCapture.value = editedEmployee.value.employee_id;
+        isNewEmployeeBeingCaptured.value = false;
+        employeeDialog.value = false;
+        showFaceCaptureDialog.value = true;
+      } else {
+        showSnackbar('Please select an employee or enter the ID to train the face.', 'warning');
+      }
     };
 
-    const confirmRestoreEmployee = (employee) => {
-      selectedEmployee.value = employee;
-      actionType.value = 'restore';
-      confirmDialog.value = true;
+    const onFaceCaptureCompleted = () => {
+      showSnackbar('Facial data has been successfully collected/updated!', 'success');
+      showFaceCaptureDialog.value = false;
+      if (isEditing.value) {
+        employeeDialog.value = true;
+      } else {
+        closeEmployeeDialog();
+      }
+      fetchEmployees();
+    };
+
+    const onFaceCaptureCancelled = () => {
+      showSnackbar('Facial data collection has been cancelled.', 'warning');
+      showFaceCaptureDialog.value = false;
+      if (isEditing.value) {
+        employeeDialog.value = true;
+      }
+      employeeIdForFaceCapture.value = null;
+      isNewEmployeeBeingCaptured.value = false;
+    };
+
+    const confirmSoftDelete = (e) => { 
+      selectedEmployee.value = e; 
+      actionType.value = 'delete'; 
+      confirmDialog.value = true; 
+    };
+    
+    const confirmRestoreEmployee = (e) => { 
+      selectedEmployee.value = e; 
+      actionType.value = 'restore'; 
+      confirmDialog.value = true; 
     };
 
     const executeConfirmedAction = async () => {
       if (!selectedEmployee.value) return;
-
       try {
-        if (actionType.value === 'delete') {
-          await deleteEmployee(selectedEmployee.value.employee_id);
-          showSnackbar(`Employee deleted ${selectedEmployee.value.full_name}.`, 'success');
-        } else if (actionType.value === 'restore') {
-          await restoreEmployee(selectedEmployee.value.employee_id);
-          showSnackbar(`Employee restored ${selectedEmployee.value.full_name}.`, 'success');
-        }
-        confirmDialog.value = false;
-        selectedEmployee.value = null;
+        if (actionType.value === 'delete') await deleteEmployee(selectedEmployee.value.employee_id);
+        if (actionType.value === 'restore') await restoreEmployee(selectedEmployee.value.employee_id);
+        showSnackbar(`Employee ${actionType.value}d`, 'success');
         fetchEmployees();
-      } catch (error) {
-        console.error(`Error ${actionType.value}ing employee:`, error);
-        showSnackbar(`Error when ${actionType.value === 'delete' ? 'deleted' : 'restore'} employee: ${error.response?.data?.error || error.message}`, 'error');
+      } catch (err) {
+        showSnackbar(`Error: ${err.message}`, 'error');
       }
+      confirmDialog.value = false;
     };
 
     const showSnackbar = (message, color) => {
-      snackbar.value.message = message;
-      snackbar.value.color = color;
-      snackbar.value.show = true;
+      snackbar.value = { show: true, message, color };
     };
 
     onMounted(fetchEmployees);
 
     return {
-      employees,
-      totalEmployees,
-      loading,
-      searchQuery,
-      options,
-      employeeDialog,
-      isEditing,
-      editedEmployee,
-      headers,
-      openAddEmployeeDialog,
-      openEditEmployeeDialog,
-      closeEmployeeDialog,
-      saveEmployee,
-      confirmDialog,
-      selectedEmployee,
-      actionType,
-      confirmSoftDelete,
-      confirmRestoreEmployee,
-      executeConfirmedAction,
-      showSnackbar,
-      snackbar,
-      debouncedSearch,
-      updateOptions,
+      employees, totalEmployees, loading, searchQuery, options,
+      employeeDialog, isEditing, editedEmployee, headers,
+      openAddEmployeeDialog, openEditEmployeeDialog, closeEmployeeDialog, saveEmployee,
+      confirmDialog, selectedEmployee, actionType,
+      confirmSoftDelete, confirmRestoreEmployee, executeConfirmedAction,
+      snackbar, showSnackbar, updateOptions, debouncedSearch, onSearchClear,
+      employeeIdForFaceCapture, showFaceCaptureDialog, onFaceCaptureCompleted, onFaceCaptureCancelled,
+      isNewEmployeeBeingCaptured, openFaceCaptureForEdit,
+      canEditIdInDialog,
       defaultAvatar
     };
   }
 });
 </script>
-
-<style scoped>
-.employee-management-content {
-  padding: 30px;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-.employee-panel-title {
-  font-size: 24px;
-  font-weight: 600;
-  color: #1e293b;
-  margin-bottom: 0;
-}
-
-/* Custom dialog titles */
-.primary-title-dialog {
-  background-color: #667eea;
-  color: white;
-  padding-left: 24px !important;
-}
-
-.red-title-dialog {
-  background-color: #ef4444;
-  color: white;
-  padding-left: 24px !important;
-}
-
-/* Avatar styling */
-.v-avatar {
-  border: 1px solid #eee;
-}
-
-/* Adjust table styling */
-.v-data-table-server {
-  box-shadow: none !important;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-/* Table headers styling */
-:deep(.v-data-table-server .v-data-table-header th) {
-  background-color: #f8fafc !important;
-  font-weight: 600 !important;
-  color: #334155 !important;
-  font-size: 0.875rem !important;
-}
-
-:deep(.v-data-table-server .v-data-table__td) {
-  font-size: 0.9rem !important;
-}
-
-/* Responsive adjustments */
-@media (max-width: 768px) {
-  .employee-management-content {
-    padding: 20px;
-  }
-  
-  .employee-panel-title {
-    font-size: 20px;
-  }
-  
-  .d-flex.align-center.justify-space-between.mb-4 {
-    flex-direction: column;
-    align-items: flex-start !important;
-    gap: 15px;
-  }
-  
-  .v-btn {
-    width: 100%;
-  }
-}
-</style>

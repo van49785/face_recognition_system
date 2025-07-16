@@ -1,5 +1,7 @@
 <template>
-  <router-view />      <!-- cứ để trống, router sẽ tự render component -->
+  <div id="app">
+    <router-view :key="$route.fullPath" />
+  </div>
 </template>
 
 <script setup>

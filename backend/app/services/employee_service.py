@@ -29,8 +29,8 @@ def add_employee_logic(data, image_files):
         if not data.get(field):
             return None, {"error": f"Missing required field {field}"}, 400
 
-    if len(image_files) < 3:
-        return None, {"error": "At least 3 images are required for face training"}, 400
+    # if len(image_files) < 3:
+    #     return None, {"error": "At least 3 images are required for face training"}, 400
 
     employee_id = data['employee_id'].upper()
     if Employee.query.filter_by(employee_id=employee_id).first():
@@ -113,10 +113,10 @@ def get_employees_logic(status_param=None, page=1, limit=10, search='', sort_by=
         search_term = f"%{search}%"
         query = query.filter(
             db.or_(
-                Employee.employee_id.ilike(search_term),
-                Employee.full_name.ilike(search_term),
-                Employee.email.ilike(search_term),
-                Employee.department.ilike(search_term)
+                Employee.employee_id.like(search_term),
+                Employee.full_name.like(search_term),
+                Employee.email.like(search_term),
+                Employee.department.like(search_term)
             )
         )
     
