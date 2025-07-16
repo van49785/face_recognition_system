@@ -54,14 +54,7 @@
             </div>
 
             <div v-else-if="currentTab === 'attendance-history'" class="content-panel">
-              <h2 class="panel-title">Attendance History</h2>
-              <div class="panel-content">
-                <div class="placeholder-content">
-                  <v-icon size="64" color="primary" class="placeholder-icon">mdi-calendar-clock</v-icon>
-                  <h3>Attendance History</h3>
-                  <p>Tính năng lịch sử chấm công và xuất Excel sẽ được triển khai tại đây</p>
-                </div>
-              </div>
+              <AttendanceHistoryTab />
             </div>
 
             <div v-else-if="currentTab === 'audit-logs'" class="content-panel">
@@ -98,11 +91,13 @@ import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import EmployeeManagementTab from '@/components/EmployeeManagementTab.vue';
+import AttendanceHistoryTab from '@/components/AttendanceHistoryTab.vue';
 
 export default {
   name: 'AdminDashboard',
   components: {
-    EmployeeManagementTab
+    EmployeeManagementTab,
+    AttendanceHistoryTab
   },
   setup() {
     const currentTab = ref('employee-management');

@@ -292,5 +292,107 @@ export function getRequiredPoses() {
   return Promise.resolve(['front', 'left', 'right', 'up', 'down']);
 }
 
+// Report API functions
+export const getEmployeeReport = async (employee_id, startDate, endDate) => {
+  try {
+    console.log('Get employee report:', employee_id, startDate, endDate)
+    // Corrected: employee_id is a path parameter
+    const response = await api.get(`/api/reports/employee/${employee_id}`, {
+      params: { start_date: startDate, end_date: endDate }
+    })
+    return response.data
+  } catch (error) {
+    console.error('Get employee report error:', error.response?.data || error.message)
+    throw error
+  }
+}
+
+export const getDepartmentReport = async (department, startDate, endDate) => {
+  try {
+    console.log('Get department report:', department, startDate, endDate)
+    // Corrected: department is a path parameter
+    const response = await api.get(`/api/reports/department/${department}`, {
+      params: { start_date: startDate, end_date: endDate }
+    })
+    return response.data
+  } catch (error) {
+    console.error('Get department report error:', error.response?.data || error.message)
+    throw error
+  }
+}
+
+export const exportReport = async (reportType, startDate, endDate) => {
+  try {
+    console.log('Export report request:', reportType, startDate, endDate)
+    const response = await api.get(`/api/reports/export/${reportType}`, {
+      params: {
+        start_date: startDate,
+        end_date: endDate,
+        download: true // Request direct file download
+      },
+      responseType: 'blob' // Important: receive response as a Blob
+    })
+    return response.data // This will be the Blob
+  } catch (error) {
+    console.error('Export report error:', error.response?.data || error.message)
+    throw error
+  }
+}
+
+// Utility function to download file from Blob
+export const downloadReportFile = (blob, filename) => {
+  try {
+    console.log('⬇️ Download report file:', filename)
+    
+    // Create a temporary URL for the blob
+    const url = window.URL.createObjectURL(blob)
+    
+    // Create an <a> element to trigger download
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    
+    // Cleanup
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+    
+    console.log('Download file success:', filename)
+    return true
+    
+  } catch (error) {
+    console.error('Download file error:', error)
+    throw error
+  }
+}
+
+// Helper function to format report type for export
+export const formatReportType = (type, id) => {
+  switch (type) {
+    case 'employee':
+      return `employee/${id}`
+    case 'department':
+      return `department/${id}`
+    default:
+      return type
+  }
+}
+
+// Helper function to parse company config
+export const parseCompanyConfig = (config) => {
+  const parsed = {}
+  
+  for (const [key, value] of Object.entries(config)) {
+    if (typeof value === 'string' && value.includes(':')) {
+      // Parse time strings back to time objects or keep as string
+      parsed[key] = value // Keep as string or parse further if needed on frontend
+    } else {
+      parsed[key] = value
+    }
+  }
+  return parsed
+}
+
 
 export default api
