@@ -246,24 +246,68 @@ class FacialRecognitionService:
     # ---------- Recognition ----------
     @staticmethod
     def recognize_face_with_multiple_encodings(img):
-        # Hàm này vẫn giữ nguyên vì liveness đã được xử lý bởi recognize_face_with_liveness trước khi gọi nó
-        enc = face_recognition.face_encodings(img)
-        if not enc:
-            return False,"Failed to generate encoding",None
-        current = enc[0]
+        """
+        So khớp khuôn mặt trong ảnh với danh sách encoding đã lưu.
+        Sử dụng chuẩn hóa vector, lọc theo pose và chất lượng ảnh, giới hạn threshold an toàn.
+        """
+        # 1. Trích xuất encoding từ ảnh mới
+        face_locations = face_recognition.face_locations(img)
+        if len(face_locations) != 1:
+            return False, "Image must contain exactly one face", None
+
+        encodings = face_recognition.face_encodings(img, face_locations)
+        if not encodings:
+            return False, "Failed to generate encoding", None
+
+        current_encoding = encodings[0]
+        current_encoding = current_encoding / np.linalg.norm(current_encoding)  # Normalize
+
+        # 2. Phát hiện pose ảnh hiện tại (nếu có)
+        pose_type, _ = FacialRecognitionService.detect_face_pose(img, face_locations)
+
+        # 3. Truy xuất danh sách nhân sự đã training
         employees = Employee.query.filter_by(status=True, face_training_completed=True).all()
         if not employees:
-            return False,"No employees have completed face training yet",None
-        best_dist,best_emp = float("inf"),None
+            return False, "No employees have completed face training yet", None
+
+        best_match = {
+            "distance": float("inf"),
+            "employee": None
+        }
+
         for emp in employees:
-            td = FaceTrainingData.get_employee_encodings(emp.employee_id)
-            for d in td:
-                stored = np.frombuffer(d.face_encoding, dtype=np.float64)
-                dist = face_recognition.face_distance([stored], current)[0]
-                dist *= (1+(100-d.image_quality_score)/100)
-                if dist<best_dist:
-                    best_dist,best_emp = dist,emp
-        return (True,"Face recognized successfully",best_emp) if best_dist<0.5 else (False,"Face does not match any registered employee",None)
+            training_data_list = FaceTrainingData.get_employee_encodings(emp.employee_id)
+            for d in training_data_list:
+                # 3.1 Giải mã encoding & chuẩn hóa
+                stored_encoding = np.frombuffer(d.face_encoding, dtype=np.float64)
+                stored_encoding = stored_encoding / np.linalg.norm(stored_encoding)
+
+                # 3.2 Lọc theo pose (nếu metadata có)
+                if "pose_type" in d.metadata and d.metadata["pose_type"] != pose_type:
+                    continue
+
+                # 3.3 Lọc theo chất lượng
+                if "image_quality_score" in d.metadata and d.metadata["image_quality_score"] < 35:
+                    continue
+
+                # 3.4 Tính khoảng cách cosine (tốt hơn Euclidean)
+                dist = np.dot(current_encoding, stored_encoding)
+                angle = np.arccos(np.clip(dist, -1.0, 1.0))  # cosine angle
+
+                # 3.5 Chuyển angle thành khoảng cách giả lập để dễ dùng threshold
+                pseudo_dist = 1 - dist
+
+                if pseudo_dist < best_match["distance"]:
+                    best_match["distance"] = pseudo_dist
+                    best_match["employee"] = emp
+
+        # 4. So sánh với ngưỡng chặt chẽ
+        THRESHOLD = 0.35  # Có thể điều chỉnh từ 0.30 – 0.40 tùy yêu cầu chính xác
+        if best_match["employee"] and best_match["distance"] < THRESHOLD:
+            return True, "Face recognized successfully", best_match["employee"]
+        else:
+            return False, "Face does not match any registered employee", None
+
 
     @staticmethod
     def recognize_face_with_liveness(img, session_id: str): # Bổ sung tham số session_id
