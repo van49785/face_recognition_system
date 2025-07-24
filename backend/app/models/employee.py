@@ -16,7 +16,6 @@ class Employee(db.Model):
     full_name = db.Column(db.String(128), nullable=False, index=True) 
     department = db.Column(db.String(64), index=True)  
     position = db.Column(db.String(64))  
-    face_encoding = db.Column(db.LargeBinary, nullable=True)  
     face_training_completed = db.Column(db.Boolean, default=False, nullable=False) 
     face_training_date = db.Column(db.DateTime, nullable=True)  
     total_poses_trained = db.Column(db.Integer, default=0)  # Số pose đã train
@@ -98,11 +97,18 @@ class Employee(db.Model):
     
     # Đánh dấu hoàn thành training khuôn mặt
     def complete_face_training(self):
-        """Cập nhật trạng thái training khuôn mặt khi đủ số pose"""
+        """Cập nhật trạng thái training khuôn mặt khi đủ số pose và lưu vào DB"""
+        # Đảm bảo employee đã được flush/commit trước khi query FaceTrainingData
+        if self.id is None:
+            db.session.flush()  # Đảm bảo employee có ID
+        
+        poses_count = FaceTrainingData.get_employee_pose_count(self.employee_id)
+        
         self.face_training_completed = True
         self.face_training_date = datetime.now(pytz.timezone("Asia/Ho_Chi_Minh")).replace(tzinfo=None)
-        self.total_poses_trained = FaceTrainingData.get_employee_pose_count(self.employee_id)
-        self.face_encoding = None  # Xóa face_encoding cũ để đảm bảo tương thích
+        self.total_poses_trained = poses_count
+        db.session.add(self) # Thêm đối tượng vào session (nếu chưa có)
+        db.session.commit() # LƯU THAY ĐỔI VÀO CƠ SỞ DỮ LIỆU
     
     # Kiểm tra đủ dữ liệu training
     def has_sufficient_training_data(self):
