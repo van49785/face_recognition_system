@@ -216,11 +216,18 @@ class FacialRecognitionService:
 
     # ---------- Encoding with metadata (FIXED) ----------
     @staticmethod
-    def generate_face_encoding_with_metadata(file_like, employee_id, pose_type=None):
+    def generate_face_encoding_with_metadata(file_like, pose_type=None, employee_id=None):
         """
         Tiền xử lý ảnh, phát hiện khuôn mặt và sinh ra vector encoding (512D, ArcFace).
         FIXED: Thêm tham số employee_id và logic auto-update training completion
-        Trả về: (thành công, thông báo, vector bytes, metadata dict)
+        
+        Args:
+            file_like: File object chứa ảnh
+            pose_type: Loại pose (để tương thích ngược)
+            employee_id: ID nhân viên (để cập nhật training completion)
+            
+        Returns:
+            (thành công, thông báo, vector bytes, metadata dict)
         """
         # 1. Đọc ảnh và kiểm tra điều kiện ánh sáng
         img = FacialRecognitionService._bytes_to_image(file_like.read())

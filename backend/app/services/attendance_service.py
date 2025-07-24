@@ -265,9 +265,13 @@ def capture_face_training_logic(image_file, base64_image, employee_id, pose_type
     except (base64.binascii.Error, ValueError) as e:
         return None, {"error": f"Image processing error: {str(e)}"}, 400
 
-    # Sinh face-encoding & metadata
+    # FIXED: Sinh face-encoding & metadata với employee_id
     success, message, encoding, metadata = (
-        FacialRecognitionService.generate_face_encoding_with_metadata(image_data, pose_type)
+        FacialRecognitionService.generate_face_encoding_with_metadata(
+            image_data, 
+            pose_type=pose_type,           # Named parameter
+            employee_id=employee_id.upper()  # Named parameter - QUAN TRỌNG!
+        )
     )
     if not success:
         return None, {"error": message}, 400
@@ -286,26 +290,43 @@ def capture_face_training_logic(image_file, base64_image, employee_id, pose_type
 
     # Ghi dữ liệu training
     try:
-        training_data = FaceTrainingData.create_training_data(
-            employee_id=employee_id,
-            pose_type=metadata['pose_type'],
-            face_encoding=encoding,
-            image_quality_score=metadata['image_quality_score']
-        )
-        db.session.add(training_data)
+        # IMPROVED: Kiểm tra và thay thế pose existing nếu có
+        existing_training = FaceTrainingData.query.filter_by(
+            employee_id=employee_id.upper(), 
+            pose_type=metadata['pose_type']
+        ).first()
+        
+        if existing_training:
+            # Cập nhật pose hiện có
+            existing_training.face_encoding = encoding
+            existing_training.image_quality_score = metadata['image_quality_score']
+            existing_training.created_at = datetime.now(pytz.timezone("Asia/Ho_Chi_Minh")).replace(tzinfo=None)
+            print(f"🔄 Cập nhật pose {metadata['pose_type']} cho {employee_id}")
+        else:
+            # Tạo pose mới
+            training_data = FaceTrainingData.create_training_data(
+                employee_id=employee_id.upper(),
+                pose_type=metadata['pose_type'],
+                face_encoding=encoding,
+                image_quality_score=metadata['image_quality_score']
+            )
+            db.session.add(training_data)
+            print(f"➕ Tạo pose mới {metadata['pose_type']} cho {employee_id}")
 
-        # Kiểm tra progress và update employee status
-        current_progress = employee.get_face_training_progress()
-        if current_progress['poses_completed'] >= 3:
-            employee.complete_face_training()
-
+        # NOTE: Không cần gọi thêm complete_face_training() ở đây nữa
+        # vì đã được xử lý tự động trong generate_face_encoding_with_metadata()
+        
         db.session.commit()
         
         # Refresh progress sau khi commit
         updated_progress = employee.get_face_training_progress()
         
+        # Log để debug
+        print(f"📊 Progress của {employee_id}: {updated_progress['poses_completed']}/{updated_progress['poses_required']} - Completed: {employee.face_training_completed}")
+        
     except Exception as e:
         db.session.rollback()
+        print(f"❌ Database error: {e}")
         return None, {"error": f"Database error: {str(e)}"}, 500
 
     return {
@@ -313,5 +334,5 @@ def capture_face_training_logic(image_file, base64_image, employee_id, pose_type
         "message": "Pose captured successfully",
         "pose_type": metadata['pose_type'],
         "progress": updated_progress,
-        "employee_id": employee_id
+        "employee_id": employee_id.upper()
     }, None, 200
