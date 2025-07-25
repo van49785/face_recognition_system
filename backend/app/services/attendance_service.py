@@ -1,4 +1,4 @@
-# backend/app/utils/attendance_utils.py # Lưu ý: Đây là comment trong file, tên file thực tế là attendance_service.py
+# backend/app/utils/attendance_service.py 
 
 from datetime import datetime, timedelta, time
 import pytz
@@ -13,13 +13,17 @@ from app.services.facial_service import FacialRecognitionService
 from app.models.attendance import Attendance
 from app.models.employee import Employee
 from app.models.face_training_data import FaceTrainingData
+from app.models.settings import Settings
 from app.utils.helpers import get_vn_datetime, format_datetime_vn, format_time_vn, get_upload_path
 
-def recognize_face_logic(image_file, base64_image, location, device_info, session_id: str): # THÊM session_id VÀO ĐÂY
-    """Logic nhận diện khuôn mặt và ghi nhận chấm công"""
+def recognize_face_logic(image_file, base64_image, location, device_info, session_id: str):
+    """Logic nhận diện khuôn mặt và ghi nhận chấm công với settings validation"""
     # Kiểm tra đầu vào
     if not image_file and not base64_image:
         return None, {"error": "No image provided"}, 400
+
+    # Lấy settings hiện tại
+    settings = Settings.get_current_settings()
 
     # Đọc & chuẩn hóa ảnh
     try:
@@ -37,7 +41,7 @@ def recognize_face_logic(image_file, base64_image, location, device_info, sessio
     except Exception:
         return None, {"error": "Invalid image input"}, 400
 
-    # Nhận diện khuôn mặt (Đã thêm session_id vào đây)
+    # Nhận diện khuôn mặt
     success, message, employee = FacialRecognitionService.recognize_face_with_liveness(image, session_id)
     if not success:
         return None, {"error": message}, 400
@@ -48,74 +52,81 @@ def recognize_face_logic(image_file, base64_image, location, device_info, sessio
     full_name = employee.full_name
     department = employee.department
 
-    # Lấy thời gian & cài đặt chấm công
+    # Lấy thời gian hiện tại
     current_time = get_vn_datetime()
     current_date = current_time.date()
     current_hour = current_time.time()
-
-    start_work = time(8, 30)
-    checkin_start = time(7, 0)
-    checkin_late_end = time(9, 0)
-    half_day_start = time(12, 0)
-    half_day_end = time(13, 30)
 
     # Lấy log chấm công hôm nay
     records_today = Attendance.get_today_records(employee_id=employee_id)
     statuses = [r.status for r in records_today]
 
-    # Ngăn chấm công trùng
-    if statuses.count("check-in") > 1 or statuses.count("check-out") > 1:
-        return None, {
-            "error": "Multiple check-in or check-out detected today. Please contact admin."
-        }, 400
+    # Kiểm tra policy constraints nếu enabled
+    if settings.enable_policies:
+        checkin_count = statuses.count("check-in")
+        checkout_count = statuses.count("check-out")
+        
+        if checkin_count >= settings.max_checkins_per_day and "check-in" not in statuses:
+            return None, {
+                "error": f"Maximum check-ins per day ({settings.max_checkins_per_day}) exceeded"
+            }, 400
+            
+        if checkout_count >= settings.max_checkouts_per_day and "check-out" not in statuses:
+            return None, {
+                "error": f"Maximum check-outs per day ({settings.max_checkouts_per_day}) exceeded"
+            }, 400
 
     # Xác định trạng thái
     if "check-in" not in statuses:
-        # --- START: Logic kiểm tra thời gian check-in TẠM THỜI VÔ HIỆU HÓA ---
-        # if current_hour < checkin_start:
-        #     return None, {
-        #         "error": "Check-in not allowed before 7:00",
-        #         "next_valid_time": format_time_vn(datetime.combine(current_date, checkin_start))
-        #     }, 400
-        # elif current_hour > checkin_late_end:
-        #     return None, {"error": "Check-in not allowed after 9:00"}, 400
-        # elif half_day_start <= current_hour <= half_day_end:
-        #     status = "check-in"
-        #     attendance_type = "half_day"
-        # elif current_hour > start_work:
-        #     status = "check-in"
-        #     attendance_type = "late"
-        # else:
-        #     status = "check-in"
-        #     attendance_type = "normal"
-        # --- END: Logic kiểm tra thời gian check-in TẠM THỜI VÔ HIỆU HÓA ---
-
-        # Logic MỚI (để test): Luôn coi là check-in bình thường
         status = "check-in"
-        attendance_type = "normal" # Mặc định là normal để dễ test
+        
+        # Áp dụng time validation nếu enabled
+        if settings.enable_time_management and settings.enable_time_validation:
+            if current_hour < settings.checkin_start_window:
+                return None, {
+                    "error": f"Check-in not allowed before {settings.checkin_start_window.strftime('%H:%M')}",
+                    "next_valid_time": format_time_vn(datetime.combine(current_date, settings.checkin_start_window))
+                }, 400
+            elif current_hour > settings.checkin_end_window:
+                return None, {
+                    "error": f"Check-in not allowed after {settings.checkin_end_window.strftime('%H:%M')}"
+                }, 400
+            elif settings.lunch_start <= current_hour <= settings.lunch_end:
+                attendance_type = "half_day"
+            elif current_hour > settings.start_work:
+                # Kiểm tra grace period
+                grace_minutes = timedelta(minutes=settings.late_arrival_grace_period_minutes)
+                work_start_with_grace = datetime.combine(current_date, settings.start_work) + grace_minutes
+                if current_time <= work_start_with_grace:
+                    attendance_type = "normal"
+                else:
+                    attendance_type = "late"
+            else:
+                attendance_type = "normal"
+        else:
+            # Nếu time management disabled, luôn coi là normal
+            attendance_type = "normal"
 
     elif "check-out" not in statuses:
+        status = "check-out"
         checkin_log = next((r for r in records_today if r.status == "check-in"), None)
         if not checkin_log:
             return None, {"error": "Unexpected error: no check-in log found."}, 500
 
-        # --- START: Logic kiểm tra thời gian check-out TẠM THỜI VÔ HIỆU HÓA ---
-        # time_diff = current_time - checkin_log.timestamp
-        # if time_diff < timedelta(hours=4):
-        #     return None, {
-        #         "error": "Cannot check out yet. Must wait at least 4 hours after check-in.",
-        #         "checked_in_at": format_time_vn(checkin_log.timestamp),
-        #         "minimum_checkout_time": format_time_vn(checkin_log.timestamp + timedelta(hours=4))
-        #     }, 400
-        # --- END: Logic kiểm tra thời gian check-out TẠM THỜI VÔ HIỆU HÓA ---
+        # Kiểm tra minimum work hours nếu enabled
+        if settings.enable_time_management and settings.enable_time_validation:
+            time_diff = current_time - checkin_log.timestamp
+            min_hours = timedelta(hours=settings.minimum_work_hours)
+            if time_diff < min_hours:
+                return None, {
+                    "error": f"Cannot check out yet. Must wait at least {settings.minimum_work_hours} hours after check-in.",
+                    "checked_in_at": format_time_vn(checkin_log.timestamp),
+                    "minimum_checkout_time": format_time_vn(checkin_log.timestamp + min_hours)
+                }, 400
         
-        # Logic MỚI (để test): Luôn coi là check-out bình thường
-        status = "check-out"
-        # Giữ nguyên attendance_type của check-in nếu có, hoặc mặc định normal
+        # Giữ nguyên attendance_type của check-in
         attendance_type = checkin_log.attendance_type if checkin_log else "normal"
-        # attendance_type = "half_day" if half_day_start <= current_hour <= half_day_end else checkin_log.attendance_type # Dòng cũ
     else:
-        # Giữ nguyên phần này
         return {
             "message": "Already checked in and out today.",
             "records_today": [
@@ -130,13 +141,14 @@ def recognize_face_logic(image_file, base64_image, location, device_info, sessio
     # Ghi log chấm công
     try:
         attendance = Attendance.create_attendance(
-        employee_id=employee_id,
-        status=status,
-        timestamp=current_time,
-        attendance_type=attendance_type
-    )
+            employee_id=employee_id,
+            status=status,
+            timestamp=current_time,
+            attendance_type=attendance_type
+        )
         db.session.add(attendance)
         db.session.commit()
+        
         return {
             "message": "Attendance recorded successfully",
             "employee": {
@@ -253,9 +265,13 @@ def capture_face_training_logic(image_file, base64_image, employee_id, pose_type
     except (base64.binascii.Error, ValueError) as e:
         return None, {"error": f"Image processing error: {str(e)}"}, 400
 
-    # Sinh face-encoding & metadata
+    # FIXED: Sinh face-encoding & metadata với employee_id
     success, message, encoding, metadata = (
-        FacialRecognitionService.generate_face_encoding_with_metadata(image_data, pose_type)
+        FacialRecognitionService.generate_face_encoding_with_metadata(
+            image_data, 
+            pose_type=pose_type,           # Named parameter
+            employee_id=employee_id.upper()  # Named parameter - QUAN TRỌNG!
+        )
     )
     if not success:
         return None, {"error": message}, 400
@@ -274,26 +290,43 @@ def capture_face_training_logic(image_file, base64_image, employee_id, pose_type
 
     # Ghi dữ liệu training
     try:
-        training_data = FaceTrainingData.create_training_data(
-            employee_id=employee_id,
-            pose_type=metadata['pose_type'],
-            face_encoding=encoding,
-            image_quality_score=metadata['image_quality_score']
-        )
-        db.session.add(training_data)
+        # IMPROVED: Kiểm tra và thay thế pose existing nếu có
+        existing_training = FaceTrainingData.query.filter_by(
+            employee_id=employee_id.upper(), 
+            pose_type=metadata['pose_type']
+        ).first()
+        
+        if existing_training:
+            # Cập nhật pose hiện có
+            existing_training.face_encoding = encoding
+            existing_training.image_quality_score = metadata['image_quality_score']
+            existing_training.created_at = datetime.now(pytz.timezone("Asia/Ho_Chi_Minh")).replace(tzinfo=None)
+            print(f"🔄 Cập nhật pose {metadata['pose_type']} cho {employee_id}")
+        else:
+            # Tạo pose mới
+            training_data = FaceTrainingData.create_training_data(
+                employee_id=employee_id.upper(),
+                pose_type=metadata['pose_type'],
+                face_encoding=encoding,
+                image_quality_score=metadata['image_quality_score']
+            )
+            db.session.add(training_data)
+            print(f"➕ Tạo pose mới {metadata['pose_type']} cho {employee_id}")
 
-        # Kiểm tra progress và update employee status
-        current_progress = employee.get_face_training_progress()
-        if current_progress['poses_completed'] >= 3:
-            employee.complete_face_training()
-
+        # NOTE: Không cần gọi thêm complete_face_training() ở đây nữa
+        # vì đã được xử lý tự động trong generate_face_encoding_with_metadata()
+        
         db.session.commit()
         
         # Refresh progress sau khi commit
         updated_progress = employee.get_face_training_progress()
         
+        # Log để debug
+        print(f"📊 Progress của {employee_id}: {updated_progress['poses_completed']}/{updated_progress['poses_required']} - Completed: {employee.face_training_completed}")
+        
     except Exception as e:
         db.session.rollback()
+        print(f"❌ Database error: {e}")
         return None, {"error": f"Database error: {str(e)}"}, 500
 
     return {
@@ -301,5 +334,5 @@ def capture_face_training_logic(image_file, base64_image, employee_id, pose_type
         "message": "Pose captured successfully",
         "pose_type": metadata['pose_type'],
         "progress": updated_progress,
-        "employee_id": employee_id
+        "employee_id": employee_id.upper()
     }, None, 200
