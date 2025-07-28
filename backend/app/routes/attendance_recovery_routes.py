@@ -1,7 +1,8 @@
 # app/routes/attendance_recovery_routes.py
 from flask import Blueprint, request, jsonify
 from app.services.attendance_recovery_service import AttendanceRecoveryService
-from app.utils.decorators import employee_required, admin_required # Import decorators
+from app.utils.decorators import employee_required, admin_required
+from app.services.attendance_service import get_attendance_history_logic
 from datetime import datetime
 
 attendance_recovery_bp = Blueprint('attendance_recovery_bp', __name__)
@@ -34,6 +35,28 @@ def get_my_recovery_requests():
     current_employee_id = request.current_user.employee_id
     requests = AttendanceRecoveryService.get_employee_recovery_requests(current_employee_id)
     return jsonify({"requests": requests}), 200
+
+
+@attendance_recovery_bp.route('/api/employee/attendance/history', methods=['GET'])
+@employee_required # CHỈ NHÂN VIÊN ĐÃ ĐĂNG NHẬP MỚI ĐƯỢC XEM LỊCH SỬ CỦA CHÍNH HỌ
+def get_current_employee_attendance_history():
+    """Lấy lịch sử chấm công của nhân viên đang đăng nhập."""
+    current_employee_id = request.current_user.employee_id # Lấy employee_id từ token đã xác thực
+    
+    # Có thể thêm các tham số query để lọc theo ngày/tháng
+    start_date_str = request.args.get('start_date')
+    end_date_str = request.args.get('end_date')
+
+    result, error, status = get_attendance_history_logic(current_employee_id)
+    
+    # Bạn có thể thêm logic lọc theo start_date/end_date vào get_attendance_history_logic
+    # hoặc xử lý lọc ở đây nếu hàm logic chỉ trả về tất cả.
+    # Hiện tại, get_attendance_history_logic không nhận start_date/end_date làm tham số
+    # nên nó sẽ trả về 50 bản ghi gần nhất. Nếu muốn lọc, cần điều chỉnh hàm đó.
+
+    if error:
+        return jsonify(error), status
+    return jsonify(result), status
 
 # --- ROUTES CHO ADMIN ---
 

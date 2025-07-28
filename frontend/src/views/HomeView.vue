@@ -62,8 +62,8 @@
               <div class="panel-content">
                 <div class="placeholder-content">
                   <v-icon size="64" color="primary" class="placeholder-icon">mdi-format-list-bulleted-square</v-icon>
-                  <h3>Activity Log</h3>
-                  <p>Tính năng nhật ký hoạt động hệ thống sẽ được triển khai tại đây</p>
+                  <h3>Attendance Recover Request</h3>
+                  <p>Tất cả yêu cầu khôi phục chấm công của nhân viên sẽ được hiển thị tại đây</p>
                 </div>
               </div>
             </div>
