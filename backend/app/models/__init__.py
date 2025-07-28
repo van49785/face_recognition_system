@@ -5,3 +5,4 @@ from .admin import Admin
 from .session import Session
 from .audit_log import AuditLog
 from .face_training_data import FaceTrainingData
+from .attendance_recovery import AttendanceRecoveryRequest

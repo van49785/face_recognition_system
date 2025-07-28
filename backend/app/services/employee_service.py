@@ -1,5 +1,5 @@
 # Xử lý logic liên quan nhân viên 
-# backend/app/utils/employee_utils.py
+# backend/app/services/employee_utils.py
 
 from flask import send_from_directory
 from app.models.employee import Employee
@@ -13,6 +13,8 @@ from io import BytesIO
 import os
 import pytz
 from datetime import datetime
+from typing import Optional
+from app.services.auth_service import set_employee_password 
 
 def serve_uploaded_image_logic(filename):
     """Logic phục vụ ảnh từ thư mục uploads"""
@@ -23,14 +25,11 @@ def serve_uploaded_image_logic(filename):
         return None, {"error": "File not found or cannot be served"}, 404
 
 def add_employee_logic(data, image_files):
-    """Logic thêm nhân viên mới với thông tin và ảnh khuôn mặt"""
+    """Logic thêm nhân viên mới với thông tin và ảnh khuôn mặt và mật khẩu ban đầu."""
     required_fields = ['employee_id', 'full_name', 'department']
     for field in required_fields:
         if not data.get(field):
             return None, {"error": f"Missing required field {field}"}, 400
-
-    # if len(image_files) < 3:
-    #     return None, {"error": "At least 3 images are required for face training"}, 400
 
     employee_id = data['employee_id'].upper()
     if Employee.query.filter_by(employee_id=employee_id).first():
@@ -71,11 +70,23 @@ def add_employee_logic(data, image_files):
         phone=data.get('phone'),
         email=data.get('email'),
         face_training_completed=len(pose_types) >= 3,
-        total_poses_trained=len(pose_types)
+        total_poses_trained=len(pose_types),
+        # THÊM CÁC TRƯỜNG MẶC ĐỊNH CHO TÀI KHOẢN ĐĂNG NHẬP
+        username=data.get('username'), # Có thể là employee_id hoặc email hoặc username riêng
+        # password_hash sẽ được set qua set_employee_password nếu có initial_password
     )
     try:
         db.session.add(new_employee)
-        db.session.commit()
+        db.session.commit() # Commit để có new_employee.id cho set_employee_password
+
+        # Nếu có mật khẩu ban đầu, thiết lập nó
+        initial_password = data.get('initial_password')
+        if initial_password:
+            success, msg = set_employee_password(employee_id, initial_password, username=data.get('username'))
+            if not success:
+                db.session.rollback()
+                return None, {"error": f"Failed to set initial password: {msg}"}, 500
+            
         for encoding, pose_type, quality_score in face_encodings:
             training_data = FaceTrainingData.create_training_data(
                 employee_id=employee_id,
@@ -90,6 +101,9 @@ def add_employee_logic(data, image_files):
     except IntegrityError:
         db.session.rollback()
         return None, {"error": "Database error – possibly duplicate or constraint violation"}, 500
+    except Exception as e:
+        db.session.rollback()
+        return None, {"error": f"An unexpected error occurred: {str(e)}"}, 500
 
     return {
         "message": "Employee added successfully",
@@ -244,5 +258,18 @@ def restore_employee_logic(employee_id):
     db.session.commit()
     return {
         "message": f"Employee {employee_id} restored successfully",
+        "employee": serialize_employee_full(employee)
+    }, None, 200
+
+# THÊM HÀM MỚI: Đặt lại mật khẩu cho nhân viên (Admin dùng)
+def set_employee_password_logic(employee_id: str, new_password: str, username: Optional[str] = None):
+    """Logic để Admin đặt lại mật khẩu cho nhân viên."""
+    success, message = set_employee_password(employee_id, new_password, username)
+    if not success:
+        return None, {"error": message}, 400
+    
+    employee = Employee.query.filter_by(employee_id=employee_id.upper()).first()
+    return {
+        "message": "Mật khẩu nhân viên đã được cập nhật thành công.",
         "employee": serialize_employee_full(employee)
     }, None, 200

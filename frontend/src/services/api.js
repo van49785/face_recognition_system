@@ -89,7 +89,7 @@ export const login = async (username, password) => {
   try {
     console.log('Login request:', { username: username.trim() })
     
-    const response = await api.post('/api/auth/login', { 
+    const response = await api.post('/api/auth/admin/login', { 
       username: username.trim(), 
       password: password.trim() 
     })

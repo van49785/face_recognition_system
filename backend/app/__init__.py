@@ -10,6 +10,7 @@ from .routes.employee_route import employee_bp
 from .routes.auth_routes import auth_bp
 from .routes.report_routes import report_bp
 from .routes.settings_routes import settings_bp
+from .routes.attendance_recovery_routes import attendance_recovery_bp
 from flask_jwt_extended import JWTManager
 import os
 
@@ -28,8 +29,6 @@ def create_app(config_class=Config):
             )
     app.config.from_object(config_class)
 
-    jwt = JWTManager(app)
-
     db.init_app(app)
     migrate.init_app(app, db)
     
@@ -46,6 +45,7 @@ def create_app(config_class=Config):
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(report_bp)  
     app.register_blueprint(settings_bp)
+    app.register_blueprint(attendance_recovery_bp)
 
     @app.route('/exports/<path:filename>')
     def serve_export_file(filename):
