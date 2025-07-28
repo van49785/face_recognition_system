@@ -9,9 +9,10 @@ from app.services.employee_service import (
     update_employee_logic,
     soft_delete_employee_logic,
     restore_employee_logic,
-    set_employee_password_logic # THÊM IMPORT NÀY
+    set_employee_password_logic,
+    change_employee_password_by_employee
 )
-from app.utils.decorators import admin_required # THÊM IMPORT NÀY
+from app.utils.decorators import admin_required, employee_required # THÊM IMPORT NÀY
 
 # Khởi tạo Blueprint cho các route liên quan đến employee
 employee_bp = Blueprint('employee_bp', __name__) # ĐỔI TÊN BIẾN TỪ 'employee' THÀNH 'employee_bp'
@@ -111,6 +112,30 @@ def set_employee_password_route(employee_id):
     if error:
         return jsonify(error), status
     return jsonify(result), status
+
+
+@employee_bp.route('/api/employee/change-password', methods=['POST'])
+@employee_required # Chỉ nhân viên đã đăng nhập mới được đổi mật khẩu của mình
+def change_password_by_employee_route():
+    data = request.get_json(silent=True) or {}
+    old_password = data.get('old_password')
+    new_password = data.get('new_password')
+    confirm_new_password = data.get('confirm_new_password')
+
+    if not old_password or not new_password or not confirm_new_password:
+        return jsonify({"error": "Vui lòng điền đầy đủ mật khẩu cũ và mật khẩu mới."}), 400
+    
+    if new_password != confirm_new_password:
+        return jsonify({"error": "Mật khẩu mới và xác nhận mật khẩu không khớp."}), 400
+
+    current_employee_id_int = request.current_user.id # Lấy ID (int) của nhân viên từ token
+    
+    success, message = change_employee_password_by_employee(
+        current_employee_id_int, old_password, new_password
+    )
+    if not success:
+        return jsonify({"error": message}), 400
+    return jsonify({"message": message}), 200
 
 
 

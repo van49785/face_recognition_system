@@ -85,50 +85,46 @@ def login_admin(
 
     return token, None
 
-def login_employee(employee_id_or_email: str, password: str) -> Tuple[Optional[str], Optional[str]]:
+# CẬP NHẬT: login_employee để trả về must_change_password
+def login_employee(employee_id_or_email: str, password: str) -> Tuple[Optional[str], Optional[str], Optional[bool]]:
     """
-    Đăng nhập Nhân viên. Có thể dùng employee_id hoặc email làm username.
-    Returns:
-        token (str | None), error (str | None)
+    Đăng nhập Nhân viên. Dùng employee_id (in hoa) hoặc email (in thường).
     """
-    employee: Employee | None = Employee.query.filter(
-        (Employee.employee_id == employee_id_or_email.upper()) | (Employee.email == employee_id_or_email)
+    username_input = employee_id_or_email.strip()
+    employee = Employee.query.filter(
+        (Employee.employee_id == username_input.upper()) |
+        (Employee.email == username_input.lower())
     ).first()
 
-    # Kiểm tra nếu không tìm thấy nhân viên hoặc nhân viên chưa có tài khoản đăng nhập
-    if not employee or not employee.username: 
-        return None, "Invalid username or password."
+    if not employee:
+        return None, "Invalid username or password.", None
 
     now_vn = datetime.now(VN_TIMEZONE).replace(tzinfo=None)
     if employee.locked_until and employee.locked_until > now_vn:
-        # Có thể thêm AuditLog cho employee login nếu có AuditLog model cho employee
-        return None, "Account is locked. Please try again later."
+        return None, "Account is locked. Please try again later.", None
 
-    # Kiểm tra mật khẩu
     if not employee.check_password(password):
         employee.failed_attempts += 1
-        status_msg = "Invalid username or password."
+        db.session.commit()
 
         if employee.failed_attempts >= Config.MAX_LOGIN_ATTEMPTS:
-            _lock_account(employee, Config.LOCK_DURATION_MINUTES) # SỬ DỤNG HÀM CHUNG
-            status_msg = (
-                f"Too many failed login attempts  {Config.MAX_LOGIN_ATTEMPTS} times, your account has been locked for {Config.LOCK_DURATION_MINUTES} minutes."
-            )
-        db.session.commit()
-        # Có thể thêm AuditLog cho employee login failed
-        return None, status_msg
+            _lock_account(employee, Config.LOCK_DURATION_MINUTES)
+            return None, f"Too many failed login attempts {Config.MAX_LOGIN_ATTEMPTS} times. Account locked for {Config.LOCK_DURATION_MINUTES} minutes.", None
 
-    # Đăng nhập thành công, reset
+        return None, "Invalid username or password.", None
+
+    # Đăng nhập thành công
     employee.failed_attempts = 0
     employee.locked_until = None
-    employee.last_login = now_vn # Cập nhật last_login
+    employee.last_login = now_vn
     db.session.commit()
 
-    # Tạo JWT token cho nhân viên. Payload chứa employee_id và role.
-    token = generate_jwt_token({'employee_id': employee.employee_id, 'role': 'employee', 'user_id': employee.id}) 
+    token = generate_jwt_token({
+        'employee_id': employee.employee_id,
+        'role': 'employee',
+        'user_id': employee.id
+    })
 
-    # Ghi session cho nhân viên (SỬ DỤNG PHƯƠNG THỨC create_session MỚI)
-    # Vô hiệu hóa các session cũ của nhân viên này để chỉ có 1 session active
     Session.query.filter_by(employee_id=employee.id, is_valid=True).update({'is_valid': False})
     db.session.commit()
 
@@ -137,9 +133,9 @@ def login_employee(employee_id_or_email: str, password: str) -> Tuple[Optional[s
         jwt_token=token,
         is_admin_session=False,
     )
-    # Có thể thêm AuditLog cho employee login success
 
-    return token, None
+    return token, None, employee.must_change_password
+
 
 def set_employee_password(employee_id: str, new_password: str, username: Optional[str] = None) -> Tuple[bool, Optional[str]]:
     """
@@ -153,31 +149,26 @@ def set_employee_password(employee_id: str, new_password: str, username: Optiona
     if not new_password or len(new_password) < Config.MIN_PASSWORD_LENGTH:
         return False, f"Password must have at least {Config.MIN_PASSWORD_LENGTH} characters."
 
-    # Kiểm tra username nếu được cung cấp
     if username:
-        # Nếu username được cung cấp và khác với employee_id/email hiện tại, kiểm tra tính duy nhất
         if username != employee.employee_id and username != employee.email:
             existing_employee_with_username = Employee.query.filter(
                 (Employee.employee_id == username.upper()) | (Employee.email == username)
             ).first()
             if existing_employee_with_username and existing_employee_with_username.id != employee.id:
                 return False, "Username already exists for another employee. Please select a different username."
-        employee.username = username # Đặt username theo yêu cầu
+        employee.username = username 
     else:
-        employee.username = employee.employee_id # Mặc định username là employee_id
+        employee.username = employee.employee_id 
 
     employee.set_password(new_password)
     employee.updated_at = datetime.now(VN_TIMEZONE).replace(tzinfo=None)
     db.session.commit()
     return True, None
 
-# CẬP NHẬT: Hàm logout chung
 def logout_user(user_jwt_token: str) -> None:
     """Vô hiệu hóa session của người dùng (Admin hoặc Employee)"""
     Session.invalidate_token_hash(user_jwt_token)
-    # Có thể thêm AuditLog ở đây, cần biết user_id và role từ token
 
-# CẬP NHẬT: Hàm verify token chung
 def verify_token(jwt_payload: dict) -> Optional[Union[Admin, Employee]]:
     """
     Trả về đối tượng Admin hoặc Employee nếu token hợp lệ & session vẫn active.
@@ -193,17 +184,13 @@ def verify_token(jwt_payload: dict) -> Optional[Union[Admin, Employee]]:
     if role == 'admin':
         user_obj = Admin.query.get(user_id)
     elif role == 'employee':
-        # Tìm employee bằng id từ payload (là id của bảng employees)
         user_obj = Employee.query.get(user_id)
-        # Hoặc có thể dùng employee_id nếu bạn lưu employee_id trong payload và muốn tìm theo đó
-        # user_obj = Employee.query.filter_by(employee_id=employee_id_from_payload).first()
     
     if not user_obj:
         return None
     
     hashed = Session.hash_token(jwt_payload["jti"]) if "jti" in jwt_payload else None
     if hashed:
-        # Tìm session dựa trên user_id và loại session
         session_query = Session.query.filter_by(jwt_token_hash=hashed, is_valid=True)
         if role == 'admin':
             session_query = session_query.filter_by(admin_id=user_id, is_admin_session=True)
@@ -213,7 +200,7 @@ def verify_token(jwt_payload: dict) -> Optional[Union[Admin, Employee]]:
         session = session_query.first()
 
         if session and not session.is_expired():
-            session.update_activity() # Cập nhật thời gian hoạt động cuối
+            session.update_activity() 
             return user_obj
         
     return None

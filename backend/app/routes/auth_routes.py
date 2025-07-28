@@ -32,7 +32,7 @@ def employee_login():
     if not username or not password:
         return jsonify(error="Username or password must not be empty."), 400
 
-    token, err = login_employee(username, password)
+    token, err, must_change_password = login_employee(username, password)
     if err:
         return jsonify(error=err), 401
     
@@ -42,7 +42,8 @@ def employee_login():
         token=token, 
         employee_id=employee.employee_id if employee else None, 
         full_name=employee.full_name if employee else None, 
-        role="employee"
+        role="employee",
+        must_change_password=must_change_password
     ), 200
 
 # CẬP NHẬT: Route verify chung cho cả Admin và Employee

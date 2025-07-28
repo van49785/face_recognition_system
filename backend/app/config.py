@@ -15,6 +15,7 @@ class Config:
     JWT_HEADER_NAME = 'Authorization'
     JWT_HEADER_TYPE = 'Bearer'  # Dạng: Bearer <token>
     MIN_PASSWORD_LENGTH = 6
+    MAX_LOGIN_ATTEMPTS = 5
 
 
 class DevelopmentConfig(Config):

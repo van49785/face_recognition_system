@@ -23,6 +23,7 @@ class Employee(db.Model):
     last_login = db.Column(db.DateTime, nullable=True, index=True) # Thời gian đăng nhập cuối
     failed_attempts = db.Column(db.Integer, default=0, nullable=False) # Số lần đăng nhập sai
     locked_until = db.Column(db.DateTime, nullable=True) # Thời gian khóa tài khoản nếu bị brute-force
+    must_change_password = db.Column(db.Boolean, default=False, nullable=False) # Cờ báo hiệu cần đổi mật khẩu lần đầu
 
     face_training_completed = db.Column(db.Boolean, default=False, nullable=False) 
     face_training_date = db.Column(db.DateTime, nullable=True)  
