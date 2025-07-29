@@ -123,10 +123,10 @@ def change_password_by_employee_route():
     confirm_new_password = data.get('confirm_new_password')
 
     if not old_password or not new_password or not confirm_new_password:
-        return jsonify({"error": "Vui lòng điền đầy đủ mật khẩu cũ và mật khẩu mới."}), 400
+        return jsonify({"error": "Please fill in both the current and new passwords."}), 400
     
     if new_password != confirm_new_password:
-        return jsonify({"error": "Mật khẩu mới và xác nhận mật khẩu không khớp."}), 400
+        return jsonify({"error": "The new password and confirmation password do not match."}), 400
 
     current_employee_id_int = request.current_user.id # Lấy ID (int) của nhân viên từ token
     

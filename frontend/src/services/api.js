@@ -337,6 +337,20 @@ export const setEmployeePassword = async (employee_id, new_password, username = 
   }
 }
 
+export const employeeChangePassword = async (oldPassword, newPassword, confirmNewPassword) => {
+  try {
+    const response = await api.post('/api/employee/change-password', {
+      old_password: oldPassword,
+      new_password: newPassword,
+      confirm_new_password: confirmNewPassword,
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Employee change password error:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
 
 // Gửi ảnh training (base64 hoặc blob)
 export function captureFacePose(data) {

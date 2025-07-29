@@ -6,13 +6,44 @@ import Login from '../views/Login.vue';
 import Employees from '../views/Employees.vue';
 import Attendance from '../views/Attendance.vue';
 import Reports from '../views/Reports.vue';
+import ChangePasswordPage from '@/views/ChangePasswordPage.vue';
 
 const routes = [
-  { path: '/', name: 'Home', component: Home, meta: { requiresAuth: true } },
-  { path: '/login', name: 'Login', component: Login },
-  { path: '/employees', name: 'Employees', component: Employees, meta: { requiresAuth: true } },
-  { path: '/attendance', name: 'Attendance', component: Attendance, meta: { requiresAuth: false } },
-  { path: '/reports', name: 'Reports', component: Reports, meta: { requiresAuth: true } },
+  { 
+    path: '/', 
+    name: 'Home', 
+    component: Home, 
+    meta: { requiresAuth: true, role: 'admin' }
+  },
+  { 
+    path: '/login', 
+    name: 'Login', 
+    component: Login 
+  },
+  { 
+    path: '/employees', 
+    name: 'Employees', 
+    component: Employees, 
+    meta: { requiresAuth: true, role: 'employee' }
+  },
+  { 
+    path: '/attendance', 
+    name: 'Attendance', 
+    component: Attendance, 
+    meta: { requiresAuth: false }
+  },
+  { 
+    path: '/reports', 
+    name: 'Reports', 
+    component: Reports, 
+    meta: { requiresAuth: true, role: 'admin' }
+  },
+  { 
+    path: '/employee/change-password', 
+    name: 'ChangePasswordPage', 
+    component: ChangePasswordPage, 
+    meta: { requiresAuth: true, role: 'employee' }
+  }
 ];
 
 const router = createRouter({
@@ -21,12 +52,11 @@ const router = createRouter({
 });
 
 router.beforeEach(async (to, from, next) => {
-  // Đảm bảo Pinia đã được khởi tạo
   const authStore = useAuthStore();
   
   // Đợi store khởi tạo xong
   if (!authStore.isInitialized) {
-    authStore.initializeFromStorage();
+    await authStore.initializeFromStorage();
   }
   
   console.log('🔍 Router guard:', {
@@ -34,54 +64,91 @@ router.beforeEach(async (to, from, next) => {
     from: from.name,
     requiresAuth: to.meta.requiresAuth,
     isAuthenticated: authStore.isAuthenticated,
+    userRole: authStore.user?.role,
+    mustChangePassword: authStore.user?.must_change_password,
     hasToken: !!authStore.token,
-    localStorageToken: !!localStorage.getItem('token')
   });
-  
-  // Nếu route yêu cầu authentication
-  if (to.meta.requiresAuth) {
-    if (to.meta.requiresAuth !== true) {
-      if (to.name === 'Login' && authStore.isAuthenticated) {
-        const redirectPath = to.query.redirect || '/';
-        next(redirectPath);
-      } else {
-        next();
-      }
-      return; // Quan trọng: return để không chạy code bên dưới
-    }
-    if (!authStore.isAuthenticated) {
-      console.log('Route requires auth but user not authenticated, redirecting to login');
-      // Lưu route đích để redirect sau khi login
-      const redirectPath = to.fullPath !== '/login' ? to.fullPath : '/';
-      next({ name: 'Login', query: { redirect: redirectPath } });
+
+  const isAuthenticated = authStore.isAuthenticated;
+  const userRole = authStore.user?.role;
+  const mustChangePassword = authStore.user?.must_change_password;
+  const targetRequiresAuth = to.meta.requiresAuth;
+  const targetRequiredRole = to.meta.role;
+
+  // 1. Nếu đang đi đến trang Login
+  if (to.name === 'Login') {
+    // Nếu chưa đăng nhập hoặc đã logout, cho phép vào login
+    if (!isAuthenticated) {
+      console.log('User not authenticated, allowing access to login page.');
+      next();
       return;
     }
     
-    // Nếu có token, verify token với server (tùy chọn)
-    if (authStore.token) {
-      try {
-        // Có thể thêm verify token ở đây nếu cần
-        console.log('User authenticated, proceeding to route');
-        next();
-      } catch (error) {
-        console.log('Token verification failed, redirecting to login');
-        authStore.logout();
-        next({ name: 'Login', query: { redirect: to.fullPath } });
+    // Nếu đã đăng nhập, redirect đến trang phù hợp
+    console.log('User already authenticated, redirecting from login page.');
+    if (userRole === 'admin') {
+      next({ name: 'Home' });
+    } else if (userRole === 'employee') {
+      if (mustChangePassword) {
+        next({ name: 'ChangePasswordPage' });
+      } else {
+        next({ name: 'Employees' });
       }
     } else {
-      console.log('No token found, redirecting to login');
-      next({ name: 'Login', query: { redirect: to.fullPath } });
-    }
-  } else {
-    // Public routes
-    if (to.name === 'Login' && authStore.isAuthenticated) {
-      console.log('User already authenticated, checking for redirect');
-      // Kiểm tra redirect query param
-      const redirectPath = to.query.redirect || '/';
-      next(redirectPath);
-    } else {
+      // Nếu role không xác định, cho phép vào login
+      console.log('Unknown role, allowing login access.');
       next();
     }
+    return;
+  }
+
+  // 2. Nếu route yêu cầu xác thực
+  if (targetRequiresAuth) {
+    if (!isAuthenticated) {
+      console.log('Route requires auth but user not authenticated. Redirecting to login.');
+      next({ name: 'Login', query: { redirect: to.fullPath } });
+      return;
+    }
+
+    // Nếu đã xác thực, kiểm tra cờ must_change_password (chỉ áp dụng cho employee)
+    if (userRole === 'employee' && mustChangePassword) {
+      // Nếu employee phải đổi mật khẩu và không phải là trang đổi mật khẩu, chuyển hướng
+      if (to.name !== 'ChangePasswordPage') {
+        console.log('Employee must change password. Redirecting to change password page.');
+        next({ name: 'ChangePasswordPage' });
+        return;
+      }
+    }
+
+    // Kiểm tra quyền hạn (role)
+    if (targetRequiredRole && userRole !== targetRequiredRole) {
+      console.log(`User role (${userRole}) does not match required role (${targetRequiredRole}). Redirecting.`);
+      if (userRole === 'admin') {
+        next({ name: 'Home' });
+      } else if (userRole === 'employee') {
+        // Kiểm tra xem employee có cần đổi mật khẩu không
+        if (mustChangePassword) {
+          next({ name: 'ChangePasswordPage' });
+        } else {
+          next({ name: 'Employees' });
+        }
+      } else {
+        // Nếu vai trò không xác định, đăng xuất và về login
+        console.log('Unknown role, logging out and redirecting to login.');
+        authStore.logout();
+        next({ name: 'Login' });
+      }
+      return;
+    }
+    
+    // Nếu mọi thứ ổn, cho phép truy cập
+    console.log('User authenticated and authorized. Proceeding to route.');
+    next();
+
+  } else {
+    // 3. Các route không yêu cầu xác thực
+    console.log('Public route. Proceeding.');
+    next();
   }
 });
 
