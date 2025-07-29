@@ -152,3 +152,32 @@ class AttendanceRecoveryService:
         except Exception as e:
             db.session.rollback()
             return False, f"An error occurred: {str(e)}"
+
+    @staticmethod
+    def get_all_recovery_requests() -> List[Dict[str, Any]]:
+        """Admin xem tất cả các yêu cầu phục hồi chấm công (bao gồm pending, approved, rejected)."""
+        requests = AttendanceRecoveryRequest.query\
+            .order_by(AttendanceRecoveryRequest.requested_at.desc())\
+            .all()
+
+        results = []
+        for r in requests:
+            admin_name = None
+            if r.admin_id:
+                admin = Admin.query.get(r.admin_id)
+                if admin:
+                    admin_name = admin.username
+            
+            results.append({
+                "request_id": r.request_id,
+                "employee_id": r.employee.employee_id,
+                "employee_name": r.employee.full_name,
+                "request_date": r.request_date.strftime('%Y-%m-%d'),
+                "requested_at": format_datetime_vn(r.requested_at),
+                "reason": r.reason,
+                "status": r.status,
+                "admin_username": admin_name,  # Tên admin đã duyệt/từ chối
+                "approved_at": format_datetime_vn(r.approved_at) if r.approved_at else None,
+                "notes": r.notes
+            })
+        return results

@@ -60,6 +60,13 @@ def get_current_employee_attendance_history():
 
 # --- ROUTES CHO ADMIN ---
 
+# Thêm route mới để lấy tất cả requests
+@attendance_recovery_bp.route('/api/admin/attendance/recovery/all', methods=['GET'])
+@admin_required
+def get_all_recovery_requests():
+    requests = AttendanceRecoveryService.get_all_recovery_requests()
+    return jsonify({"requests": requests}), 200
+
 @attendance_recovery_bp.route('/api/admin/attendance/recovery/pending', methods=['GET'])
 @admin_required # Chỉ Admin mới được xem các yêu cầu đang chờ
 def get_pending_recovery_requests():
@@ -67,21 +74,26 @@ def get_pending_recovery_requests():
     return jsonify({"pending_requests": requests}), 200
 
 @attendance_recovery_bp.route('/api/admin/attendance/recovery/process/<string:request_id>', methods=['POST'])
-@admin_required # Chỉ Admin mới được xử lý yêu cầu
+@admin_required  # Gắn request.current_user
 def process_attendance_recovery(request_id):
     data = request.get_json(silent=True) or {}
-    status = data.get('status') # 'approved' hoặc 'rejected'
+    status = data.get('status')  # 'approved' hoặc 'rejected'
     notes = data.get('notes')
-    
-    # request.current_user được đặt bởi decorator @admin_required
-    current_admin_id = request.current_user.id 
 
+    admin = getattr(request, "current_user", None)
+    if not admin:
+        return jsonify({"error": "Admin not authenticated. Please log in again."}), 401
+    
     if status not in ['approved', 'rejected']:
         return jsonify({"error": "Invalid status. Only 'approved' or 'rejected' are accepted."}), 400
 
     success, message = AttendanceRecoveryService.process_recovery_request(
-        request_id, current_admin_id, status, notes
+        request_id=request_id,
+        admin_id=admin.id,
+        status=status,
+        notes=notes
     )
+
     if not success:
         return jsonify({"error": message}), 400
     return jsonify({"message": message}), 200

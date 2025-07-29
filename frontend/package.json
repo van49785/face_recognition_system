@@ -12,6 +12,7 @@
   "dependencies": {
     "@mdi/font": "^7.4.47",
     "axios": "^1.10.0",
+    "dayjs": "^1.11.13",
     "deepmerge": "^4.3.1",
     "jwt-decode": "^4.0.0",
     "lucide-vue-next": "^0.525.0",

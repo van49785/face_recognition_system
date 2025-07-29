@@ -1,10 +1,10 @@
-
-# app/routes/settings_routes.py
-
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.models.settings import Settings
+from app.models.attendance import Attendance
+from app.models.face_training_data import FaceTrainingData
+from app.models.employee import Employee
 from app.models.admin import Admin
+from app.utils.decorators import admin_required
 from app import db
 from datetime import datetime, timedelta
 import os
@@ -13,25 +13,16 @@ import shutil
 settings_bp = Blueprint('settings_bp', __name__)
 
 @settings_bp.route('/api/settings', methods=['GET'])
-@jwt_required()
+@admin_required
 def get_settings():
     """Lấy tất cả các cài đặt hiện có."""
-    admin_id = get_jwt_identity()
-    admin = Admin.query.get(admin_id)
-    if not admin:
-        return jsonify({"error": "Unauthorized access"}), 401
     settings = Settings.get_current_settings()
     return jsonify(settings.to_dict()), 200
 
 @settings_bp.route('/api/settings', methods=['POST'])
-@jwt_required()
+@admin_required
 def update_settings():
     """Cập nhật các cài đặt."""
-    admin_id = get_jwt_identity()
-    admin = Admin.query.get(admin_id)
-    if not admin:
-        return jsonify({"error": "Unauthorized access"}), 401
-    
     data = request.get_json()
     if not data:
         return jsonify({"error": "Invalid or missing JSON data"}), 400
@@ -49,21 +40,15 @@ def update_settings():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @settings_bp.route('/api/settings/cleanup-data', methods=['POST'])
-@jwt_required()
+@admin_required
 def cleanup_old_data():
     """Xóa dữ liệu cũ dựa trên cài đặt Data Retention Days."""
-    admin_id = get_jwt_identity()
-    admin = Admin.query.get(admin_id)
-    if not admin:
-        return jsonify({"error": "Unauthorized access"}), 401
-    
     settings = Settings.get_current_settings()
     data_retention_days = settings.data_retention_days
-    
+
     if data_retention_days is None or data_retention_days <= 0:
         return jsonify({"message": "Data retention not configured or disabled"}), 200
 
-    from app.models.attendance import Attendance
     try:
         cutoff_date = datetime.now() - timedelta(days=data_retention_days)
         records_to_delete = Attendance.query.filter(Attendance.timestamp < cutoff_date).all()
@@ -81,14 +66,9 @@ def cleanup_old_data():
         return jsonify({"error": f"Failed to cleanup data: {str(e)}"}), 500
 
 @settings_bp.route('/api/settings/create-backup', methods=['POST'])
-@jwt_required()
+@admin_required
 def create_backup():
     """Tạo bản sao lưu cơ sở dữ liệu."""
-    admin_id = get_jwt_identity()
-    admin = Admin.query.get(admin_id)
-    if not admin:
-        return jsonify({"error": "Unauthorized access"}), 401
-
     try:
         db_path = db.engine.url.database
         backup_dir = "backups"
@@ -109,22 +89,13 @@ def create_backup():
         return jsonify({"error": f"Failed to create backup: {str(e)}"}), 500
 
 @settings_bp.route('/api/settings/reset-system', methods=['POST'])
-@jwt_required()
+@admin_required
 def reset_system():
     """Đặt lại tất cả các cài đặt về giá trị mặc định và xóa dữ liệu."""
-    admin_id = get_jwt_identity()
-    admin = Admin.query.get(admin_id)
-    if not admin:
-        return jsonify({"error": "Unauthorized access"}), 401
-
     try:
         db.session.query(Settings).delete()
         default_settings = Settings()
         db.session.add(default_settings)
-        
-        from app.models.attendance import Attendance
-        from app.models.face_training_data import FaceTrainingData
-        from app.models.employee import Employee
 
         db.session.query(Attendance).delete()
         db.session.query(FaceTrainingData).delete()

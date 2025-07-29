@@ -29,9 +29,11 @@ def create_app(config_class=Config):
             )
     app.config.from_object(config_class)
 
+    jwt = JWTManager(app)
+
     db.init_app(app)
-    migrate.init_app(app, db)
-    
+    migrate.init_app(app, db) 
+
     # Cấu hình CORS chi tiết hơn
     CORS(app, resources={
         r"/api/*": {"origins": ["http://localhost:3000", "http://localhost:5173"], "methods": ["GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"]},
