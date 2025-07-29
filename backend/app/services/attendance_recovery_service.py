@@ -6,8 +6,9 @@ from app.models.employee import Employee
 from app.models.admin import Admin # Import Admin để liên kết người duyệt
 from app.utils.helpers import get_vn_datetime, format_datetime_vn # Import format_datetime_vn
 from sqlalchemy.exc import IntegrityError
-from datetime import datetime, date
-from typing import Optional, List, Dict, Any, Tuple
+from datetime import datetime, time
+from typing import Optional, List, Dict, Any, Tuple       
+from app.models.attendance_recovery import AttendanceRecoveryRequest
 
 class AttendanceRecoveryService:
     @staticmethod
@@ -118,7 +119,6 @@ class AttendanceRecoveryService:
 
             if status == 'approved':
                 # Logic để "phục hồi" chấm công trong bảng Attendance
-                # Cập nhật các bản ghi hiện có của ngày đó thành 'recovered'
                 attendance_records_for_day = Attendance.get_records_by_employee_and_date(
                     employee_id=request.employee_id,
                     target_date=request.request_date
@@ -126,24 +126,38 @@ class AttendanceRecoveryService:
 
                 if not attendance_records_for_day:
                     # Nếu không có bản ghi nào, tạo một bản ghi 'check-in' với type 'recovered'
-                    # Điều này giả định rằng "phục hồi" có nghĩa là coi như đã check-in bình thường
-                    # Bạn có thể điều chỉnh timestamp nếu muốn chính xác hơn, ví dụ: giờ bắt đầu làm việc
-                    new_attendance = Attendance.create_attendance(
+                    # FIX: Sử dụng time(8,0,0) thay vì datetime(1,1,1,8,0,0).time()
+                    checkin_time = datetime.combine(request.request_date, time(8, 0, 0))
+                    checkout_time = datetime.combine(request.request_date, time(17, 0, 0))
+                    
+                    # Tạo check-in record
+                    checkin_record = Attendance.create_attendance(
                         employee_id=request.employee_id,
                         status='check-in', 
-                        timestamp=datetime.combine(request.request_date, datetime(1,1,1,8,0,0).time()).replace(tzinfo=None), # Giả định 8h sáng
+                        timestamp=checkin_time,
                         attendance_type='recovered', 
                         location="Recovery Request", 
                         device_info="System Generated"
                     )
-                    db.session.add(new_attendance)
+                    db.session.add(checkin_record)
+                    
+                    # Tạo check-out record để đảm bảo có đủ giờ làm
+                    checkout_record = Attendance.create_attendance(
+                        employee_id=request.employee_id,
+                        status='check-out', 
+                        timestamp=checkout_time,
+                        attendance_type='recovered', 
+                        location="Recovery Request", 
+                        device_info="System Generated"
+                    )
+                    db.session.add(checkout_record)
                 else:
                     # Cập nhật tất cả các bản ghi của ngày đó thành 'recovered'
                     for record in attendance_records_for_day:
-                        # Chỉ cập nhật nếu nó là 'late' hoặc 'half_day'
-                        if record.attendance_type in ['late', 'half_day']:
-                            record.attendance_type = 'recovered' 
-                db.session.commit() # Commit sau khi cập nhật hoặc thêm bản ghi chấm công
+                        # Cập nhật attendance_type thành 'recovered' cho tất cả records của ngày đó
+                        record.attendance_type = 'recovered'
+                        
+                db.session.commit()
 
             return True, f"The request has been {status}."
         except IntegrityError:

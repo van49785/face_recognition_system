@@ -7,6 +7,7 @@ from app.models.attendance import Attendance
 from app.models.employee import Employee
 from app.utils.helpers import get_vn_datetime, format_datetime_vn, get_export_path
 from sqlalchemy import and_
+from app.models.attendance_recovery import AttendanceRecoveryRequest
 
 # Company configuration rules
 COMPANY_CONFIG = {
@@ -97,145 +98,174 @@ def get_date_range(args):
     return start, end, None, None
 
 def process_employee_attendance_enhanced(employee_id, start_date, end_date):
-    """Processes advanced attendance data for an employee."""
-    records = Attendance.query.filter(
-        and_(
-            Attendance.employee_id == employee_id.upper(),
-            Attendance.timestamp >= start_date,
-            Attendance.timestamp <= end_date
-        )
-    ).order_by(Attendance.timestamp.asc()).all()
+    
+        records = Attendance.query.filter(
+            and_(
+                Attendance.employee_id == employee_id.upper(),
+                Attendance.timestamp >= start_date,
+                Attendance.timestamp <= end_date
+            )
+        ).order_by(Attendance.timestamp.asc()).all()
 
-    working_days_in_period = get_working_days_between(start_date, end_date)
+        # THÊM: Lấy các recovery requests đã được approve
+        approved_recoveries = AttendanceRecoveryRequest.query.filter(
+            and_(
+                AttendanceRecoveryRequest.employee_id == employee_id.upper(),
+                AttendanceRecoveryRequest.request_date >= start_date.date(),
+                AttendanceRecoveryRequest.request_date <= end_date.date(),
+                AttendanceRecoveryRequest.status == 'approved'
+            )
+        ).all()
+        
+        approved_recovery_dates = {req.request_date for req in approved_recoveries}
 
-    report = {
-        "normal_days": 0,
-        "late_days": 0,
-        "half_days": 0,
-        "early_departure_days": 0,
-        "forgot_checkout_days": 0,
-        "absent_days": 0,
-        "total_work_hours": 0,
-        "total_overtime_hours": 0,
-        "total_undertime_hours": 0,
-        "total_late_minutes": 0,
-        "total_early_minutes": 0,
-        "total_attendance_days": 0,
-        "working_days_in_period": working_days_in_period,
-        "attendance_rate": 0,
-        "avg_checkin_time": None,
-        "avg_checkout_time": None,
-        "daily_records": []
-    }
+        working_days_in_period = get_working_days_between(start_date, end_date)
 
-    daily_grouped_records = defaultdict(list)
-    for record in records:
-        daily_grouped_records[record.timestamp.date()].append(record)
-
-    checkin_times_for_avg = []
-    checkout_times_for_avg = []
-
-    current_day_iterator = start_date.date()
-    while current_day_iterator <= end_date.date():
-        day_report = {
-            "date": current_day_iterator.strftime("%Y-%m-%d"),
-            "checkin_time": None,
-            "checkout_time": None,
-            "work_hours": 0,
-            "late_minutes": 0,
-            "early_minutes": 0,
-            "overtime_hours": 0,
-            "undertime_hours": 0,
-            "attendance_type": "absent",
-            "status": "absent"
+        report = {
+            "normal_days": 0,
+            "late_days": 0,
+            "half_days": 0,
+            "recovered_days": 0,  # THÊM: Đếm số ngày recovered
+            "early_departure_days": 0,
+            "forgot_checkout_days": 0,
+            "absent_days": 0,
+            "total_work_hours": 0,
+            "total_overtime_hours": 0,
+            "total_undertime_hours": 0,
+            "total_late_minutes": 0,
+            "total_early_minutes": 0,
+            "total_attendance_days": 0,
+            "working_days_in_period": working_days_in_period,
+            "attendance_rate": 0,
+            "avg_checkin_time": None,
+            "avg_checkout_time": None,
+            "daily_records": []
         }
 
-        if current_day_iterator.weekday() < 5:  # Only process weekdays (Mon-Fri)
-            day_records = daily_grouped_records.get(current_day_iterator)
-            
-            if day_records:
-                day_records.sort(key=lambda x: x.timestamp)
-                checkin = next((r for r in day_records if r.status == "check-in"), None)
-                checkout = next((r for r in day_records if r.status == "check-out"), None)
+        daily_grouped_records = defaultdict(list)
+        for record in records:
+            daily_grouped_records[record.timestamp.date()].append(record)
 
-                if checkin:
-                    report["total_attendance_days"] += 1
-                    day_report["checkin_time"] = checkin.timestamp.strftime("%H:%M:%S")
-                    day_report["attendance_type"] = checkin.attendance_type
-                    day_report["status"] = "present"
+        checkin_times_for_avg = []
+        checkout_times_for_avg = []
 
-                    late_minutes = calculate_late_minutes(checkin.timestamp)
-                    day_report["late_minutes"] = round(late_minutes)
-                    report["total_late_minutes"] += round(late_minutes)
+        current_day_iterator = start_date.date()
+        while current_day_iterator <= end_date.date():
+            day_report = {
+                "date": current_day_iterator.strftime("%Y-%m-%d"),
+                "checkin_time": None,
+                "checkout_time": None,
+                "work_hours": 0,
+                "late_minutes": 0,
+                "early_minutes": 0,
+                "overtime_hours": 0,
+                "undertime_hours": 0,
+                "attendance_type": "absent",
+                "status": "absent"
+            }
 
-                    checkin_times_for_avg.append(checkin.timestamp.time())
+            if current_day_iterator.weekday() < 5:  # Only process weekdays (Mon-Fri)
+                day_records = daily_grouped_records.get(current_day_iterator)
+                
+                if day_records:
+                    day_records.sort(key=lambda x: x.timestamp)
+                    checkin = next((r for r in day_records if r.status == "check-in"), None)
+                    checkout = next((r for r in day_records if r.status == "check-out"), None)
 
-                    if checkin.attendance_type == "normal":
-                        report["normal_days"] += 1
-                    elif checkin.attendance_type == "late":
-                        report["late_days"] += 1
-                    elif checkin.attendance_type == "half_day":
-                        report["half_days"] += 1
+                    if checkin:
+                        report["total_attendance_days"] += 1
+                        day_report["checkin_time"] = checkin.timestamp.strftime("%H:%M:%S")
+                        day_report["attendance_type"] = checkin.attendance_type
+                        day_report["status"] = "present"
 
-                    if checkout:
-                        day_report["checkout_time"] = checkout.timestamp.strftime("%H:%M:%S")
-                        work_hours = calculate_work_hours(checkin.timestamp, checkout.timestamp)
-                        day_report["work_hours"] = round(work_hours, 2)
-                        report["total_work_hours"] += round(work_hours, 2)
+                        # THÊM: Xử lý các loại attendance type khác nhau
+                        if checkin.attendance_type == "normal":
+                            report["normal_days"] += 1
+                        elif checkin.attendance_type == "late":
+                            report["late_days"] += 1
+                        elif checkin.attendance_type == "half_day":
+                            report["half_days"] += 1
+                        elif checkin.attendance_type == "recovered":
+                            report["recovered_days"] += 1
 
-                        early_minutes = calculate_early_minutes(checkout.timestamp)
-                        day_report["early_minutes"] = round(early_minutes)
-                        report["total_early_minutes"] += round(early_minutes)
+                        # Tính toán late minutes (trừ khi là recovered)
+                        if checkin.attendance_type != "recovered":
+                            late_minutes = calculate_late_minutes(checkin.timestamp)
+                            day_report["late_minutes"] = round(late_minutes)
+                            report["total_late_minutes"] += round(late_minutes)
 
-                        if early_minutes > COMPANY_CONFIG['EARLY_THRESHOLD_MINUTES']:
-                            report["early_departure_days"] += 1
+                        checkin_times_for_avg.append(checkin.timestamp.time())
 
-                        overtime = calculate_overtime_hours(work_hours)
-                        undertime = calculate_undertime_hours(work_hours)
-                        day_report["overtime_hours"] = round(overtime, 2)
-                        day_report["undertime_hours"] = round(undertime, 2)
-                        report["total_overtime_hours"] += round(overtime, 2)
-                        report["total_undertime_hours"] += round(undertime, 2)
+                        if checkout:
+                            day_report["checkout_time"] = checkout.timestamp.strftime("%H:%M:%S")
+                            work_hours = calculate_work_hours(checkin.timestamp, checkout.timestamp)
+                            day_report["work_hours"] = round(work_hours, 2)
+                            report["total_work_hours"] += round(work_hours, 2)
 
-                        checkout_times_for_avg.append(checkout.timestamp.time())
+                            # Tính toán early minutes (trừ khi là recovered)
+                            if checkout.attendance_type != "recovered":
+                                early_minutes = calculate_early_minutes(checkout.timestamp)
+                                day_report["early_minutes"] = round(early_minutes)
+                                report["total_early_minutes"] += round(early_minutes)
+
+                                if early_minutes > COMPANY_CONFIG['EARLY_THRESHOLD_MINUTES']:
+                                    report["early_departure_days"] += 1
+
+                            overtime = calculate_overtime_hours(work_hours)
+                            undertime = calculate_undertime_hours(work_hours)
+                            day_report["overtime_hours"] = round(overtime, 2)
+                            day_report["undertime_hours"] = round(undertime, 2)
+                            report["total_overtime_hours"] += round(overtime, 2)
+                            report["total_undertime_hours"] += round(undertime, 2)
+
+                            checkout_times_for_avg.append(checkout.timestamp.time())
+                        else:
+                            report["forgot_checkout_days"] += 1
+                            # Nếu recovered và không có checkout, coi như đủ giờ
+                            if checkin.attendance_type == "recovered":
+                                day_report["work_hours"] = round(COMPANY_CONFIG['STANDARD_WORK_HOURS'], 2)
+                                report["total_work_hours"] += round(COMPANY_CONFIG['STANDARD_WORK_HOURS'], 2)
+                            else:
+                                day_report["undertime_hours"] = round(COMPANY_CONFIG['STANDARD_WORK_HOURS'], 2)
+                                report["total_undertime_hours"] += round(COMPANY_CONFIG['STANDARD_WORK_HOURS'], 2)
+                else:
+                    # THÊM: Check nếu ngày này có recovery request được approve
+                    if current_day_iterator in approved_recovery_dates:
+                        # Coi như present với type recovered
+                        day_report["status"] = "present"
+                        day_report["attendance_type"] = "recovered"
+                        day_report["work_hours"] = round(COMPANY_CONFIG['STANDARD_WORK_HOURS'], 2)
+                        report["recovered_days"] += 1
+                        report["total_attendance_days"] += 1
+                        report["total_work_hours"] += round(COMPANY_CONFIG['STANDARD_WORK_HOURS'], 2)
                     else:
-                        report["forgot_checkout_days"] += 1
-                        # If forgotten check-out, still count missing hours for that day
+                        # No records for this workday => absent
+                        report["absent_days"] += 1
                         day_report["undertime_hours"] = round(COMPANY_CONFIG['STANDARD_WORK_HOURS'], 2)
                         report["total_undertime_hours"] += round(COMPANY_CONFIG['STANDARD_WORK_HOURS'], 2)
-                else:
-                    # No check-in for the workday => absent
-                    report["absent_days"] += 1
-                    day_report["undertime_hours"] = round(COMPANY_CONFIG['STANDARD_WORK_HOURS'], 2)
-                    report["total_undertime_hours"] += round(COMPANY_CONFIG['STANDARD_WORK_HOURS'], 2)
-            else:
-                # No records for this workday => absent
-                report["absent_days"] += 1
-                day_report["undertime_hours"] = round(COMPANY_CONFIG['STANDARD_WORK_HOURS'], 2)
-                report["total_undertime_hours"] += round(COMPANY_CONFIG['STANDARD_WORK_HOURS'], 2)
-        
-        report["daily_records"].append(day_report)
-        current_day_iterator += timedelta(days=1)
+            
+            report["daily_records"].append(day_report)
+            current_day_iterator += timedelta(days=1)
 
-    # Calculate attendance rate
-    report["attendance_rate"] = (report["total_attendance_days"] / working_days_in_period * 100) if working_days_in_period > 0 else 0
+        # Calculate attendance rate
+        report["attendance_rate"] = (report["total_attendance_days"] / working_days_in_period * 100) if working_days_in_period > 0 else 0
 
-    # Calculate average times
-    if checkin_times_for_avg:
-        avg_checkin_seconds = sum(t.hour * 3600 + t.minute * 60 + t.second for t in checkin_times_for_avg) / len(checkin_times_for_avg)
-        report["avg_checkin_time"] = str(timedelta(seconds=int(avg_checkin_seconds)))
+        # Calculate average times
+        if checkin_times_for_avg:
+            avg_checkin_seconds = sum(t.hour * 3600 + t.minute * 60 + t.second for t in checkin_times_for_avg) / len(checkin_times_for_avg)
+            report["avg_checkin_time"] = str(timedelta(seconds=int(avg_checkin_seconds)))
 
-    if checkout_times_for_avg:
-        avg_checkout_seconds = sum(t.hour * 3600 + t.minute * 60 + t.second for t in checkout_times_for_avg) / len(checkout_times_for_avg)
-        report["avg_checkout_time"] = str(timedelta(seconds=int(avg_checkout_seconds)))
+        if checkout_times_for_avg:
+            avg_checkout_seconds = sum(t.hour * 3600 + t.minute * 60 + t.second for t in checkout_times_for_avg) / len(checkout_times_for_avg)
+            report["avg_checkout_time"] = str(timedelta(seconds=int(avg_checkout_seconds)))
 
-    # Round total values
-    report["total_work_hours"] = round(report["total_work_hours"], 2)
-    report["total_overtime_hours"] = round(report["total_overtime_hours"], 2)
-    report["total_undertime_hours"] = round(report["total_undertime_hours"], 2)
-    report["attendance_rate"] = round(report["attendance_rate"], 2)
+        # Round total values
+        report["total_work_hours"] = round(report["total_work_hours"], 2)
+        report["total_overtime_hours"] = round(report["total_overtime_hours"], 2)
+        report["total_undertime_hours"] = round(report["total_undertime_hours"], 2)
+        report["attendance_rate"] = round(report["attendance_rate"], 2)
 
-    return report
+        return report
 
 def get_employee_report_enhanced(employee_id, start_date, end_date):
     """Generates an enhanced employee attendance report."""

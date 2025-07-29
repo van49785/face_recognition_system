@@ -7,6 +7,7 @@ from app.services.report_service import (
     COMPANY_CONFIG
 )
 from app.utils.helpers import get_export_path
+from app.utils.decorators import employee_required, admin_required
 import os
 import logging
 
@@ -15,6 +16,7 @@ report_bp = Blueprint('reports', __name__)
 logger = logging.getLogger(__name__)
 
 @report_bp.route('/api/reports/employee/<string:employee_id>', methods=['GET'])
+@admin_required
 def employee_report(employee_id):
     """Báo cáo chấm công nâng cao của một nhân viên"""
     start_date, end_date, error, status = get_date_range(request.args)
@@ -27,6 +29,7 @@ def employee_report(employee_id):
     return jsonify(result), 200
 
 @report_bp.route('/api/reports/department/<string:department>', methods=['GET'])
+@admin_required
 def department_report(department):
     """Báo cáo chấm công nâng cao của một phòng ban"""
     start_date, end_date, error, status = get_date_range(request.args)
@@ -39,6 +42,7 @@ def department_report(department):
     return jsonify(result), 200
 
 @report_bp.route('/api/reports/export/<path:report_type>', methods=['GET'])
+@admin_required
 def export_report(report_type):
     """Xuất báo cáo nâng cao ra file Excel"""
     try:
@@ -77,6 +81,7 @@ def export_report(report_type):
         return jsonify({"error": f"Export failed: {str(e)}"}), 500
 
 @report_bp.route('/api/reports/download/<filename>', methods=['GET'])
+@admin_required
 def download_exported_file(filename):
     """Download file đã export"""
     try:
@@ -98,6 +103,7 @@ def download_exported_file(filename):
         return jsonify({"error": f"Download failed: {str(e)}"}), 500
 
 @report_bp.route('/api/reports/company-config', methods=['GET'])
+@admin_required
 def get_company_config():
     """Lấy cấu hình quy định công ty"""
     try:
@@ -119,6 +125,7 @@ def get_company_config():
         return jsonify({"error": f"Failed to get config: {str(e)}"}), 500
 
 @report_bp.route('/api/reports/export-status', methods=['GET'])
+@admin_required
 def export_status():
     """Kiểm tra trạng thái export và danh sách file"""
     try:
