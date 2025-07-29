@@ -31,20 +31,13 @@ class Admin(db.Model):
         self.password_hash = hash_password(password)
     
     def check_password(self, password):
-        """Kiểm tra password và cập nhật failed_attempts"""
-        if not self.check_password_hash(self.password_hash, password):
-            self.failed_attempts += 1
-            if self.failed_attempts >= 5:
-                self.lock_account()
-            return False
-        self.failed_attempts = 0  # Reset sau khi đăng nhập thành công
-        # Đồng bộ timezone
-        self.last_login = datetime.now(pytz.timezone("Asia/Ho_Chi_Minh")).replace(tzinfo=None)
-        return True
+        """Kiểm tra password - CHỈ kiểm tra, không tăng failed_attempts"""
+        return check_password_hash(self.password_hash, password)
+
     
-    def check_password_hash(self, password_hash, password):
-        """Tách riêng để có thể tái sử dụng"""
-        return check_password_hash(password_hash, password)
+    # def check_password_hash(self, password_hash, password):
+    #     """Tách riêng để có thể tái sử dụng"""
+    #     return check_password_hash(password_hash, password)
     
     def is_locked(self):
         """Kiểm tra tài khoản có bị khóa hoặc không hoạt động"""

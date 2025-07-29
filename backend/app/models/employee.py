@@ -1,10 +1,11 @@
 # Import các thư viện cần thiết
-from app import db  
-from datetime import datetime, timezone, date  
+from app.db import db  
+from datetime import datetime, timezone, date, timedelta 
 import re 
 from app.models.attendance import Attendance  
 from app.models.face_training_data import FaceTrainingData  
 import pytz 
+from app.utils.security import hash_password, check_password_hash 
 
 # Model lưu trữ thông tin nhân viên
 class Employee(db.Model):
@@ -16,11 +17,19 @@ class Employee(db.Model):
     full_name = db.Column(db.String(128), nullable=False, index=True) 
     department = db.Column(db.String(64), index=True)  
     position = db.Column(db.String(64))  
+
+    username = db.Column(db.String(64), unique=True, nullable=True, index=True) # Có thể dùng employee_id hoặc email làm username
+    password_hash = db.Column(db.String(255), nullable=True) # Hash của mật khẩu
+    last_login = db.Column(db.DateTime, nullable=True, index=True) # Thời gian đăng nhập cuối
+    failed_attempts = db.Column(db.Integer, default=0, nullable=False) # Số lần đăng nhập sai
+    locked_until = db.Column(db.DateTime, nullable=True) # Thời gian khóa tài khoản nếu bị brute-force
+    must_change_password = db.Column(db.Boolean, default=False, nullable=False) # Cờ báo hiệu cần đổi mật khẩu lần đầu
+
     face_training_completed = db.Column(db.Boolean, default=False, nullable=False) 
     face_training_date = db.Column(db.DateTime, nullable=True)  
     total_poses_trained = db.Column(db.Integer, default=0)  # Số pose đã train
     phone = db.Column(db.String(20))  
-    email = db.Column(db.String(120), index=True)  
+    email = db.Column(db.String(120), unique=True, index=True)  
     status = db.Column(db.Boolean, default=True, nullable=False)  # Trạng thái nhân viên (active/inactive)
     created_at = db.Column(db.DateTime, 
                           default=lambda: datetime.now(pytz.timezone("Asia/Ho_Chi_Minh")).replace(tzinfo=None), 
@@ -32,6 +41,40 @@ class Employee(db.Model):
     # Quan hệ với các bảng khác
     attendance_records = db.relationship('Attendance', backref='employee', lazy=True)  # Liên kết với bảng Attendance
     face_training_data = db.relationship('FaceTrainingData', backref='employee', lazy=True)  # Liên kết với bảng FaceTrainingData
+    recovery_requests = db.relationship('AttendanceRecoveryRequest', backref='employee', lazy=True)
+    sessions = db.relationship('Session', backref='employee', lazy=True)
+    
+    def set_password(self, password):
+        """Hash và lưu password cho nhân viên"""
+        self.password_hash = hash_password(password)
+    
+    def check_password(self, password):
+        """Kiểm tra password của nhân viên"""
+        if not self.password_hash: # Nếu chưa có password hash, không thể kiểm tra
+            return False
+        return check_password_hash(self.password_hash, password)
+
+    def is_locked(self):
+        """Kiểm tra tài khoản nhân viên có bị khóa hoặc không hoạt động"""
+        if not self.status: # Sử dụng trường status hiện có để kiểm tra active/inactive
+            return True
+        if self.locked_until:
+            now = datetime.now(pytz.timezone("Asia/Ho_Chi_Minh")).replace(tzinfo=None)
+            return now < self.locked_until
+        return False
+    
+    def lock_account(self, duration_minutes=30):
+        """Khóa tài khoản nhân viên trong thời gian nhất định"""
+        now = datetime.now(pytz.timezone("Asia/Ho_Chi_Minh")).replace(tzinfo=None)
+        self.locked_until = now + timedelta(minutes=duration_minutes)
+        self.failed_attempts = 0
+        db.session.commit()
+    
+    def unlock_account(self):
+        """Mở khóa tài khoản nhân viên"""
+        self.locked_until = None
+        self.failed_attempts = 0
+        db.session.commit()
     
     # Kiểm tra định dạng email
     @staticmethod
@@ -113,10 +156,10 @@ class Employee(db.Model):
         # Commit changes to database
         try:
             db.session.commit()
-            print(f"✅ Face training completed for {self.employee_id} with {self.total_poses_trained} poses")
+            print(f"Face training completed for {self.employee_id} with {self.total_poses_trained} poses")
         except Exception as e:
             db.session.rollback()
-            print(f"❌ Error completing face training for {self.employee_id}: {e}")
+            print(f"Error completing face training for {self.employee_id}: {e}")
             raise e
     
     # NEW: Method để check và update training status
@@ -143,7 +186,7 @@ class Employee(db.Model):
             return True
         except Exception as e:
             db.session.rollback()
-            print(f"❌ Error updating training status for {self.employee_id}: {e}")
+            print(f"Error updating training status for {self.employee_id}: {e}")
             return False
     
     # Kiểm tra đủ dữ liệu training
@@ -167,31 +210,31 @@ class Employee(db.Model):
                 emp.face_training_completed = True
                 emp.face_training_date = datetime.now(pytz.timezone("Asia/Ho_Chi_Minh")).replace(tzinfo=None)
                 needs_update = True
-                print(f"🔧 Fixed: {emp.employee_id} had {poses_count} poses but not marked as completed")
+                print(f"Fixed: {emp.employee_id} had {poses_count} poses but not marked as completed")
             
             # Case 2: Không đủ pose nhưng được đánh dấu complete
             elif poses_count < 5 and emp.face_training_completed:
                 emp.face_training_completed = False
                 emp.face_training_date = None
                 needs_update = True
-                print(f"🔧 Fixed: {emp.employee_id} marked complete but only has {poses_count} poses")
+                print(f"Fixed: {emp.employee_id} marked complete but only has {poses_count} poses")
             
             # Case 3: total_poses_trained không khớp với thực tế
             if emp.total_poses_trained != poses_count:
                 emp.total_poses_trained = poses_count
                 needs_update = True
-                print(f"🔧 Fixed: {emp.employee_id} pose count updated from {emp.total_poses_trained} to {poses_count}")
+                print(f"Fixed: {emp.employee_id} pose count updated from {emp.total_poses_trained} to {poses_count}")
             
             if needs_update:
                 fixed_count += 1
         
         try:
             db.session.commit()
-            print(f"✅ Fixed training status for {fixed_count} employees")
+            print(f"Fixed training status for {fixed_count} employees")
             return fixed_count
         except Exception as e:
             db.session.rollback()
-            print(f"❌ Error fixing training status: {e}")
+            print(f"Error fixing training status: {e}")
             return 0
     
     # Chuỗi đại diện cho đối tượng

@@ -15,7 +15,7 @@ class Attendance(db.Model):
                            nullable=False, index=True)  # Khóa ngoại liên kết với employees
     timestamp = db.Column(db.DateTime, nullable=False, index=True)  # Thời gian chấm công
     status = db.Column(db.String(10), nullable=False)  # Trạng thái: check-in, check-out
-    attendance_type = db.Column(db.String(20), nullable=False, default='normal')  # Loại chấm công: normal, late, half_day
+    attendance_type = db.Column(db.String(20), nullable=False, default='normal')  # Loại chấm công: normal, late, half_day, recovered
     location = db.Column(db.String(100))  # Vị trí chấm công (tùy chọn)
     device_info = db.Column(db.String(255))  # Thông tin thiết bị (tùy chọn)
     created_at = db.Column(db.DateTime, 
@@ -53,7 +53,7 @@ class Attendance(db.Model):
         if not attendance_type:
             raise ValueError("Attendance type cannot be empty")
         
-        valid_types = ['normal', 'late', 'half_day']
+        valid_types = ['normal', 'late', 'half_day', 'recovered'] 
         if attendance_type not in valid_types:
             raise ValueError(f"Invalid attendance type: {attendance_type}. Must be one of {valid_types}")
         return True
@@ -141,6 +141,14 @@ class Attendance(db.Model):
         return cls.query.filter_by(employee_id=employee_id.upper())\
                        .order_by(cls.timestamp.desc()).first()
     
+    @classmethod
+    def get_records_by_employee_and_date(cls, employee_id: str, target_date: date):
+        """Lấy tất cả bản ghi chấm công của một nhân viên trong một ngày cụ thể."""
+        return cls.query.filter(
+            cls.employee_id == employee_id,
+            db.func.date(cls.timestamp) == target_date
+        ).order_by(cls.timestamp.asc()).all()
+
     def is_late(self):
         """Kiểm tra xem có đi muộn không"""
         return self.attendance_type == 'late'

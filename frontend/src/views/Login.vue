@@ -9,7 +9,7 @@
       <!-- Connection Status -->
       <v-alert
         v-if="connectionError"
-        type="error"
+        type="error" 
         density="compact"
         class="mb-4"
         closable

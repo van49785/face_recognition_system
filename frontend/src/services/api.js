@@ -59,7 +59,8 @@ api.interceptors.response.use(
       console.log("401 Unauthorized - Token expired or invalid")
       
       // Chỉ logout nếu không phải request login
-      if (!error.config?.url?.includes('/api/auth/login')) {
+      // CẬP NHẬT: Kiểm tra cả admin/login và employee/login
+      if (!error.config?.url?.includes('/api/auth/admin/login') && !error.config?.url?.includes('/api/auth/employee/login')) {
         authStore.logout()
         
         // Redirect về login với current route
@@ -85,27 +86,53 @@ api.interceptors.response.use(
 )
 
 // Auth API functions
+// CẬP NHẬT: Hàm login cho Admin
 export const login = async (username, password) => {
   try {
-    console.log('Login request:', { username: username.trim() })
+    console.log('Admin Login request:', { username: username.trim() })
     
-    const response = await api.post('/api/auth/login', { 
+    const response = await api.post('/api/auth/admin/login', { // Đổi endpoint
       username: username.trim(), 
       password: password.trim() 
     })
     
-    console.log('Login success:', {
+    console.log('Admin Login success:', {
       hasToken: !!response.data.token,
-      user: response.data.user?.username
+      user: response.data.username // Sử dụng username từ response
     })
     
     return response.data
     
   } catch (error) {
-    console.error('Login error:', error.response?.data || error.message)
+    console.error('Admin Login error:', error.response?.data || error.message)
     throw error
   }
 }
+
+// THÊM: Hàm login cho Employee
+export const loginEmployee = async (username, password) => {
+  try {
+    console.log('Employee Login request:', { username: username.trim() })
+    
+    const response = await api.post('/api/auth/employee/login', { // Endpoint mới
+      username: username.trim(), 
+      password: password.trim() 
+    })
+    
+    console.log('Employee Login success:', {
+      hasToken: !!response.data.token,
+      employee_id: response.data.employee_id,
+      full_name: response.data.full_name
+    })
+    
+    return response.data
+    
+  } catch (error) {
+    console.error('Employee Login error:', error.response?.data || error.message)
+    throw error
+  }
+}
+
 
 export const verify = async () => {
   try {
@@ -122,7 +149,7 @@ export const verify = async () => {
   }
 }
 
-// Thay đổi hàm này:
+// CẬP NHẬT: Đổi tên hàm logout thành logoutUser để dùng chung
 export const logoutAdmin = async () => {
   try {
     console.log('🚪 Logout request')
@@ -168,6 +195,19 @@ export const getAttendanceHistory = async (employee_id) => {
   }
 }
 
+// THÊM: Hàm lấy lịch sử chấm công của nhân viên đang đăng nhập
+export const getMyAttendanceHistory = async (params = {}) => {
+  try {
+    console.log('Get my attendance history:', params)
+    // Endpoint này không cần employee_id trong URL, nó sẽ lấy từ token
+    const response = await api.get('/api/employee/attendance/history', { params })
+    return response.data
+  } catch (error) {
+    console.error('Get my attendance history error:', error.response?.data || error.message)
+    throw error
+  }
+}
+
 export const getTodayAttendance = async (employee_id) => {
   try {
     console.log('Get today attendance:', employee_id)
@@ -180,6 +220,7 @@ export const getTodayAttendance = async (employee_id) => {
 }
 
 // 1. Thêm nhân viên mới (với upload ảnh)
+// CẬP NHẬT: Thêm initial_password và username vào formData
 export const addEmployee = async (formData) => {
   try {
     console.log('👤 Add employee request')
@@ -279,6 +320,24 @@ export const restoreEmployee = async (employee_id) => {
   }
 }
 
+// THÊM: Hàm đặt lại mật khẩu cho nhân viên (Admin dùng)
+export const setEmployeePassword = async (employee_id, new_password, username = null) => {
+  try {
+    console.log('Set employee password request:', employee_id)
+    const payload = { new_password };
+    if (username) {
+      payload.username = username;
+    }
+    const response = await api.post(`/api/employees/${employee_id}/set-password`, payload)
+    console.log('Set employee password success:', response.data)
+    return response.data
+  } catch (error) {
+    console.error('Set employee password error:', error.response?.data || error.message)
+    throw error
+  }
+}
+
+
 // Gửi ảnh training (base64 hoặc blob)
 export function captureFacePose(data) {
   return api.post('/api/face-training/capture', data, {
@@ -342,7 +401,7 @@ export const exportReport = async (reportType, startDate, endDate) => {
 // Utility function to download file from Blob
 export const downloadReportFile = (blob, filename) => {
   try {
-    console.log('⬇️ Download report file:', filename)
+    console.log('Download report file:', filename)
     
     // Create a temporary URL for the blob
     const url = window.URL.createObjectURL(blob)
@@ -433,6 +492,55 @@ export const settingsApi = {
     } catch (error) {
       return { success: false, error: error.response?.data?.error || 'Failed to reset system' }
     }
+  }
+}
+
+export const getPendingRecoveryRequests = async () => {
+  try {
+    console.log('Get pending recovery requests')
+    const response = await api.get('/api/admin/attendance/recovery/pending')
+    return response.data.pending_requests
+  } catch (error) {
+    console.error('Get pending recovery requests error:', error.response?.data || error.message)
+    throw error
+  }
+}
+
+
+export const processRecoveryRequest = async ({ request_id, approved, reason }) => {
+  try {
+
+    const requestBody = {
+      status: approved ? 'approved' : 'rejected',  
+      notes: reason,  
+    };
+    
+
+    const response = await api.post(`/api/admin/attendance/recovery/process/${request_id}`, requestBody)
+
+    return response.data
+
+  } catch (error) {
+    console.error('Process recovery error details:', {
+      message: error.message,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      url: error.config?.url,
+      requestData: error.config?.data
+    });
+    throw error
+  }
+}
+
+export const getAllRecoveryRequests = async () => {
+  try {
+    console.log('Get all recovery requests')
+    const response = await api.get('/api/admin/attendance/recovery/all')
+    return response.data.requests
+  } catch (error) {
+    console.error('Get all recovery requests error:', error.response?.data || error.message)
+    throw error
   }
 }
 

@@ -1,4 +1,4 @@
-# backend/app/utils/attendance_service.py 
+# backend/app/services/attendance_service.py 
 
 from datetime import datetime, timedelta, time
 import pytz
@@ -171,7 +171,7 @@ def get_attendance_history_logic(employee_id):
         return None, {"error": "Employee not found"}, 404
     
     records = Attendance.query.filter_by(employee_id=employee_id.upper())\
-        .order_by(Attendance.timestamp.desc()).limit(50).all()
+        .order_by(Attendance.timestamp.desc()).limit(50).all() # Giữ nguyên limit 50 hoặc làm pagination ở đây
     
     result = []
     for record in records:
@@ -301,7 +301,7 @@ def capture_face_training_logic(image_file, base64_image, employee_id, pose_type
             existing_training.face_encoding = encoding
             existing_training.image_quality_score = metadata['image_quality_score']
             existing_training.created_at = datetime.now(pytz.timezone("Asia/Ho_Chi_Minh")).replace(tzinfo=None)
-            print(f"🔄 Cập nhật pose {metadata['pose_type']} cho {employee_id}")
+            print(f"Cập nhật pose {metadata['pose_type']} cho {employee_id}")
         else:
             # Tạo pose mới
             training_data = FaceTrainingData.create_training_data(
@@ -311,10 +311,7 @@ def capture_face_training_logic(image_file, base64_image, employee_id, pose_type
                 image_quality_score=metadata['image_quality_score']
             )
             db.session.add(training_data)
-            print(f"➕ Tạo pose mới {metadata['pose_type']} cho {employee_id}")
-
-        # NOTE: Không cần gọi thêm complete_face_training() ở đây nữa
-        # vì đã được xử lý tự động trong generate_face_encoding_with_metadata()
+            print(f"Tạo pose mới {metadata['pose_type']} cho {employee_id}")
         
         db.session.commit()
         
@@ -322,11 +319,11 @@ def capture_face_training_logic(image_file, base64_image, employee_id, pose_type
         updated_progress = employee.get_face_training_progress()
         
         # Log để debug
-        print(f"📊 Progress của {employee_id}: {updated_progress['poses_completed']}/{updated_progress['poses_required']} - Completed: {employee.face_training_completed}")
+        print(f"Progress của {employee_id}: {updated_progress['poses_completed']}/{updated_progress['poses_required']} - Completed: {employee.face_training_completed}")
         
     except Exception as e:
         db.session.rollback()
-        print(f"❌ Database error: {e}")
+        print(f"Database error: {e}")
         return None, {"error": f"Database error: {str(e)}"}, 500
 
     return {

@@ -1,5 +1,5 @@
 # Xử lý logic liên quan nhân viên 
-# backend/app/utils/employee_utils.py
+# backend/app/services/employee_utils.py
 
 from flask import send_from_directory
 from app.models.employee import Employee
@@ -13,6 +13,9 @@ from io import BytesIO
 import os
 import pytz
 from datetime import datetime
+from typing import Optional, Tuple
+from app.services.auth_service import set_employee_password
+from app.config import Config 
 
 def serve_uploaded_image_logic(filename):
     """Logic phục vụ ảnh từ thư mục uploads"""
@@ -22,15 +25,13 @@ def serve_uploaded_image_logic(filename):
     except Exception:
         return None, {"error": "File not found or cannot be served"}, 404
 
+# CẬP NHẬT: add_employee_logic để hỗ trợ đặt mật khẩu mặc định và cờ must_change_password
 def add_employee_logic(data, image_files):
-    """Logic thêm nhân viên mới với thông tin và ảnh khuôn mặt"""
+    """Logic thêm nhân viên mới với thông tin và ảnh khuôn mặt và mật khẩu ban đầu."""
     required_fields = ['employee_id', 'full_name', 'department']
     for field in required_fields:
         if not data.get(field):
             return None, {"error": f"Missing required field {field}"}, 400
-
-    # if len(image_files) < 3:
-    #     return None, {"error": "At least 3 images are required for face training"}, 400
 
     employee_id = data['employee_id'].upper()
     if Employee.query.filter_by(employee_id=employee_id).first():
@@ -71,11 +72,30 @@ def add_employee_logic(data, image_files):
         phone=data.get('phone'),
         email=data.get('email'),
         face_training_completed=len(pose_types) >= 3,
-        total_poses_trained=len(pose_types)
+        total_poses_trained=len(pose_types),
+        username=data.get('username') # Admin có thể cung cấp username riêng
     )
+    
+    # Logic đặt mật khẩu mặc định và cờ must_change_password
+    initial_password = data.get('initial_password')
+    if initial_password:
+        # Nếu Admin cung cấp mật khẩu ban đầu, sử dụng nó
+        new_employee.set_password(initial_password)
+        new_employee.must_change_password = False # Không cần đổi ngay nếu Admin đã đặt
+        if not new_employee.username: # Nếu Admin không đặt username, dùng employee_id
+            new_employee.username = employee_id
+    else:
+        # Nếu Admin không cung cấp, đặt mật khẩu mặc định là employee_id và buộc đổi
+        new_employee.set_password(employee_id) # Mật khẩu mặc định là employee_id
+        new_employee.must_change_password = True # Buộc đổi mật khẩu lần đầu
+        if not new_employee.username: # Nếu Admin không đặt username, dùng employee_id
+            new_employee.username = employee_id
+
+
     try:
         db.session.add(new_employee)
-        db.session.commit()
+        db.session.commit() # Commit để có new_employee.id cho FaceTrainingData
+
         for encoding, pose_type, quality_score in face_encodings:
             training_data = FaceTrainingData.create_training_data(
                 employee_id=employee_id,
@@ -90,6 +110,9 @@ def add_employee_logic(data, image_files):
     except IntegrityError:
         db.session.rollback()
         return None, {"error": "Database error – possibly duplicate or constraint violation"}, 500
+    except Exception as e:
+        db.session.rollback()
+        return None, {"error": f"An unexpected error occurred: {str(e)}"}, 500
 
     return {
         "message": "Employee added successfully",
@@ -246,3 +269,53 @@ def restore_employee_logic(employee_id):
         "message": f"Employee {employee_id} restored successfully",
         "employee": serialize_employee_full(employee)
     }, None, 200
+
+# THÊM HÀM MỚI: Đặt lại mật khẩu cho nhân viên (Admin dùng)
+def set_employee_password_logic(employee_id: str, new_password: str, username: Optional[str] = None):
+    """Logic để Admin đặt lại mật khẩu cho nhân viên."""
+    employee = Employee.query.filter_by(employee_id=employee_id.upper()).first()
+    if not employee:
+        return None, {"error": "Employee not found."}, 404
+
+    success, message = set_employee_password(employee_id, new_password, username)
+    if not success:
+        return None, {"error": message}, 400
+    
+    # Admin đặt lại mật khẩu, có thể không cần buộc đổi lần sau
+    employee.must_change_password = False 
+    db.session.commit()
+
+    return {
+        "message": "Employee password updated successfully.",
+        "employee": serialize_employee_full(employee)
+    }, None, 200
+
+# THÊM HÀM MỚI: Nhân viên tự đổi mật khẩu
+def change_employee_password_by_employee(employee_id: int, old_password: str, new_password: str) -> Tuple[bool, str]:
+    """
+    Logic cho phép nhân viên tự đổi mật khẩu của mình.
+    employee_id ở đây là ID (int) của bảng employees, không phải employee_id (str)
+    """
+    employee = Employee.query.get(employee_id)
+    if not employee:
+        return False, "Không tìm thấy nhân viên."
+
+    # Kiểm tra mật khẩu cũ
+    if not employee.check_password(old_password):
+        return False, "Mật khẩu cũ không đúng."
+    
+    # Kiểm tra độ dài mật khẩu mới
+    if not new_password or len(new_password) < Config.MIN_PASSWORD_LENGTH:
+        return False, f"Mật khẩu mới phải có ít nhất {Config.MIN_PASSWORD_LENGTH} ký tự."
+    
+    # Đặt mật khẩu mới
+    employee.set_password(new_password)
+    employee.must_change_password = False # Đã đổi mật khẩu, không cần buộc đổi nữa
+    employee.updated_at = datetime.now(pytz.timezone("Asia/Ho_Chi_Minh")).replace(tzinfo=None)
+    
+    try:
+        db.session.commit()
+        return True, "Mật khẩu đã được đổi thành công."
+    except Exception as e:
+        db.session.rollback()
+        return False, f"Lỗi khi đổi mật khẩu: {str(e)}"

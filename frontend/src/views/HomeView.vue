@@ -58,14 +58,7 @@
             </div>
 
             <div v-else-if="currentTab === 'audit-logs'" class="content-panel">
-              <h2 class="panel-title">Activity Log</h2>
-              <div class="panel-content">
-                <div class="placeholder-content">
-                  <v-icon size="64" color="primary" class="placeholder-icon">mdi-format-list-bulleted-square</v-icon>
-                  <h3>Activity Log</h3>
-                  <p>Tính năng nhật ký hoạt động hệ thống sẽ được triển khai tại đây</p>
-                </div>
-              </div>
+              <AttendanceRecoveryRequestTab />
             </div>
 
             <div v-else-if="currentTab === 'settings'" class="content-panel">
@@ -85,6 +78,7 @@ import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import EmployeeManagementTab from '@/components/EmployeeManagementTab.vue';
 import AttendanceHistoryTab from '@/components/AttendanceHistoryTab.vue';
+import AttendanceRecoveryRequestTab from '@/components/AttendanceRecoveryRequestTab.vue';
 import SettingTab from '@/components/SettingTab.vue';
 
 export default {
@@ -92,7 +86,8 @@ export default {
   components: {
     EmployeeManagementTab,
     AttendanceHistoryTab,
-    SettingTab
+    SettingTab,
+    AttendanceRecoveryRequestTab
   },
   setup() {
     const currentTab = ref('employee-management');
@@ -113,7 +108,7 @@ export default {
       },
       {
         value: 'audit-logs',
-        label: 'Activity Log',
+        label: 'Attendance Recovery Reuqest',
         icon: 'mdi-format-list-bulleted-square'
       },
       {
