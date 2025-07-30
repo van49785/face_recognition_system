@@ -12,7 +12,7 @@
         prepend-icon="mdi-shield-lock-outline"
         @click="$router.push('/login')"
       >
-        Admin Login
+        User Login
       </v-btn>
     </div>
 
