@@ -337,6 +337,20 @@ export const setEmployeePassword = async (employee_id, new_password, username = 
   }
 }
 
+export const employeeChangePassword = async (oldPassword, newPassword, confirmNewPassword) => {
+  try {
+    const response = await api.post('/api/employee/change-password', {
+      old_password: oldPassword,
+      new_password: newPassword,
+      confirm_new_password: confirmNewPassword,
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Employee change password error:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
 
 // Gửi ảnh training (base64 hoặc blob)
 export function captureFacePose(data) {
@@ -544,4 +558,38 @@ export const getAllRecoveryRequests = async () => {
   }
 }
 
+/**
+ * Gửi yêu cầu phục hồi chấm công cho nhân viên.
+ * @param {object} data - Dữ liệu yêu cầu phục hồi (request_date, request_type, desired_time, reason).
+ * @returns {Promise<object>} Thông báo thành công từ API.
+ */
+export const submitEmployeeRecoveryRequest = async (data) => {
+  try {
+    console.log('Submitting employee recovery request:', data);
+    // Endpoint: /api/employee/attendance/recovery/submit
+    const response = await api.post('/api/employee/attendance/recovery/submit', data); 
+    console.log('Employee recovery request submitted successfully:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('Error submitting employee recovery request:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * Lấy danh sách các yêu cầu phục hồi chấm công của nhân viên.
+ * @returns {Promise<object>} Danh sách các yêu cầu phục hồi của nhân viên.
+ */
+export const getEmployeeRecoveryRequests = async () => {
+  try {
+    console.log('Get employee recovery requests');
+    // Endpoint: /api/employee/attendance/recovery/my-requests
+    const response = await api.get('/api/employee/attendance/recovery/my-requests'); 
+    console.log('Employee recovery requests fetched successfully:', response.data);
+    return response.data.requests; // Giả sử response trả về { requests: [...] }
+  } catch (error) {
+    console.error('Error fetching employee recovery requests:', error.response?.data || error.message);
+    throw error;
+  }
+};
 export default api

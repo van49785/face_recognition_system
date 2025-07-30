@@ -298,15 +298,15 @@ def change_employee_password_by_employee(employee_id: int, old_password: str, ne
     """
     employee = Employee.query.get(employee_id)
     if not employee:
-        return False, "Không tìm thấy nhân viên."
+        return False, "Employee not found."
 
     # Kiểm tra mật khẩu cũ
     if not employee.check_password(old_password):
-        return False, "Mật khẩu cũ không đúng."
+        return False, "Old password is wrong."
     
     # Kiểm tra độ dài mật khẩu mới
     if not new_password or len(new_password) < Config.MIN_PASSWORD_LENGTH:
-        return False, f"Mật khẩu mới phải có ít nhất {Config.MIN_PASSWORD_LENGTH} ký tự."
+        return False, f"New password must have at least {Config.MIN_PASSWORD_LENGTH} characters."
     
     # Đặt mật khẩu mới
     employee.set_password(new_password)
@@ -315,7 +315,7 @@ def change_employee_password_by_employee(employee_id: int, old_password: str, ne
     
     try:
         db.session.commit()
-        return True, "Mật khẩu đã được đổi thành công."
+        return True, "Password changed successfully"
     except Exception as e:
         db.session.rollback()
-        return False, f"Lỗi khi đổi mật khẩu: {str(e)}"
+        return False, f"Error occur change password: {str(e)}"
