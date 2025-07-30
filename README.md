@@ -117,8 +117,6 @@ To run this project, you need to have the following installed:
    DATABASE_URL=sqlite:///./data/attendance.db
    SECRET_KEY=your_super_secret_key_here # Change this key!
    JWT_SECRET_KEY=your_jwt_secret_key_here # Change this key!
-   UPLOAD_FOLDER=./data/uploads
-   EXPORT_FOLDER=./data/exports
    ```
 
 5. **Initialize the database:**
