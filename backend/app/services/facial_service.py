@@ -87,7 +87,7 @@ class LivenessChecker:
 # Global Liveness Session Management
 # --------------------------------------------------
 LIVENESS_SESSIONS = {}
-SESSION_TIMEOUT_SECONDS = 5
+SESSION_TIMEOUT_SECONDS = 10
 MAX_FRAMES_PER_SESSION = 30
 
 # --------------------------------------------------

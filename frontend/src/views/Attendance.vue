@@ -440,6 +440,7 @@ formatHistoryDate(dateString) {
       this.statusMessage = "Webcam turned off. Ready to start new recognition.";
     },
 
+    // Sửa logic xử lý response trong sendFrameForRecognition()
     async sendFrameForRecognition() {
       if (this.isProcessing || this.currentStep !== 'camera') {
         return;
@@ -447,12 +448,12 @@ formatHistoryDate(dateString) {
 
       if (!this.$refs.videoRef || !this.$refs.canvasRef) {
         this.error = 'Camera or canvas not ready.';
+        this.isProcessing = false;
         return;
       }
 
       this.isProcessing = true;
       this.error = '';
-      this.statusMessage = "Processing... Recognizing your face, please wait";
 
       const canvas = this.$refs.canvasRef;
       const video = this.$refs.videoRef;
@@ -464,13 +465,15 @@ formatHistoryDate(dateString) {
 
       try {
         const base64Image = canvas.toDataURL('image/jpeg', 0.9).split(',')[1];
-        const response = await recognizeFace({ base64_image: base64Image, session_id: this.sessionId });
+        const response = await recognizeFace({ 
+          base64_image: base64Image, 
+          session_id: this.sessionId 
+        });
 
-        console.log('Full API Response:', response);
+        console.log('API Response:', response);
 
-        if (response.message === 'Attendance recorded successfully') {
-          console.log('Processing successful response...');
-          
+        // Xử lý response thành công (attendance recorded)
+        if (response.success && response.message === 'Attendance recorded successfully') {
           if (response.employee && response.employee.full_name) {
             this.employee = {
               employee_id: response.employee.employee_id,
@@ -489,39 +492,53 @@ formatHistoryDate(dateString) {
             this.stopContinuousRecognition();
             this.currentStep = 'success';
             this.statusMessage = "Check-in Successful!";
-            
+            return;
           } else {
-            console.error('No employee data in response:', response);
             this.error = 'Recognition successful but employee data is missing';
-            this.statusMessage = 'Recognition successful but employee data is missing';
-            this.currentStep = 'camera';
-            this.isProcessing = false;
+            this.statusMessage = this.error;
           }
-          
-        } else if (response.message && response.message.includes("Loading liveness check")) {
-          this.statusMessage = response.message;
+        }
+        
+        // Xử lý liveness detection đang diễn ra
+        else if (response.success === false && response.liveness_passed === false) {
+          // Đang trong quá trình liveness check
+          this.statusMessage = response.message || "Performing liveness check...";
           this.currentStep = 'camera';
-          this.isProcessing = false;
-          
-        } else if (response.message && response.message.includes("Liveness checking successfully")) {
-          this.statusMessage = response.message + " Detecting face...";
+        }
+        
+        // Xử lý face recognition failed
+        else if (response.success === false) {
+          this.error = response.message || 'Face recognition failed';
+          this.statusMessage = this.error;
           this.currentStep = 'camera';
-          this.isProcessing = false;
-          
-        } else {
-          console.log('Other response:', response.message);
-          this.error = response.message || 'Face recognition failed. Please try again.';
-          this.statusMessage = response.message || 'Face recognition failed. Please try again.';
+        }
+        
+        // Fallback cho các trường hợp khác
+        else {
+          this.statusMessage = response.message || "Processing...";
           this.currentStep = 'camera';
-          this.isProcessing = false;
         }
         
       } catch (err) {
         console.error('Recognition error:', err);
-        this.error = err.response?.data?.error || 'An unexpected error occurred during recognition. Please try again.';
+        this.error = err.response?.data?.message || err.response?.data?.error || 'Network error occurred';
         this.statusMessage = this.error;
         this.currentStep = 'camera';
+      } finally {
+        // Đảm bảo luôn reset isProcessing
         this.isProcessing = false;
+      }
+    },
+
+    // Tăng session timeout và giảm frequency
+    startContinuousRecognition() {
+      if (this.recognitionInterval) {
+        clearInterval(this.recognitionInterval);
+      }
+      this.sessionId = uuidv4();
+      if (this.isCameraActive) {
+        // Tăng interval lên 4 giây để tránh timeout
+        this.recognitionInterval = setInterval(this.sendFrameForRecognition, 4000);
       }
     },
 
