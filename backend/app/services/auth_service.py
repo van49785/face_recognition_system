@@ -98,6 +98,10 @@ def login_employee(employee_id_or_email: str, password: str) -> Tuple[Optional[s
         (Employee.email == username_input.lower())
     ).first()
 
+
+    if not employee.status:
+        return None, "Invalid Account", None
+
     if not employee:
         return None, "Invalid username or password.", None
 
