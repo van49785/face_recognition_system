@@ -1,6 +1,6 @@
 # API login/logout
 from flask import Blueprint, request, jsonify
-from app.services.auth_service import login_admin, login_employee, logout_user
+from app.services.auth_service import login_admin, login_employee, logout_user, forgot_password, reset_password_with_token
 from app.models.admin import Admin
 from app.models.employee import Employee 
 from app.db import db
@@ -15,7 +15,7 @@ def admin_login():
     password = data.get("password", "").strip()
 
     if not username or not password:
-        return jsonify(error="Username or password must not be empty."), 400
+        return jsonify(error="Username or password can not be empty."), 400
 
     token, err = login_admin(username, password)
     if err:
@@ -69,3 +69,75 @@ def logout():
     token = auth_header.replace("Bearer ", "")
     logout_user(token) # SỬ DỤNG HÀM LOGOUT CHUNG
     return jsonify(msg="Logout successfully"), 200
+
+@auth_bp.route("/forgot-password", methods=["POST"])
+def forgot_password_route():
+    """
+    Gửi email reset password
+    Body: {
+        "email": "user@example.com",
+        "user_type": "admin" | "employee"  # Được xác định từ tab frontend
+    }
+    """
+    data = request.get_json(silent=True) or {}
+    email = data.get("email", "").strip().lower()
+    user_type = data.get("user_type", "").strip().lower()
+    
+    # Validation
+    if not email:
+        return jsonify(error="Email is required"), 400
+        
+    if user_type not in ['admin', 'employee']:
+        return jsonify(error="Invalid user type"), 400
+        
+    # Basic email format validation
+    if "@" not in email or "." not in email:
+        return jsonify(error="Please enter a valid email address"), 400
+    
+    # Gọi service
+    success, error = forgot_password(email, user_type)
+    
+    if not success and error:
+        return jsonify(error=error), 500
+    
+    # Luôn trả về success message (bảo mật)
+    return jsonify(
+        message="If your email exists in our system, you will receive a password reset link.",
+        email=email  # Frontend có thể hiển thị email đã gửi
+    ), 200
+
+
+@auth_bp.route("/reset-password", methods=["POST"])
+def reset_password_route():
+    """
+    Reset password bằng token từ email
+    Body: {
+        "token": "jwt_token_from_email",
+        "new_password": "newpassword123",
+        "confirm_password": "newpassword123"
+    }
+    """
+    data = request.get_json(silent=True) or {}
+    token = data.get("token", "").strip()
+    new_password = data.get("new_password", "").strip()
+    confirm_password = data.get("confirm_password", "").strip()
+    
+    # Validation
+    if not token:
+        return jsonify(error="Reset token is required"), 400
+        
+    if not new_password or not confirm_password:
+        return jsonify(error="Both password fields are required"), 400
+        
+    if new_password != confirm_password:
+        return jsonify(error="Passwords do not match"), 400
+    
+    # Gọi service
+    success, error = reset_password_with_token(token, new_password)
+    
+    if not success:
+        return jsonify(error=error), 400
+        
+    return jsonify(
+        message="Your password has been successfully reset! You can now login with your new password."
+    ), 200
