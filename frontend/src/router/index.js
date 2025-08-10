@@ -7,6 +7,7 @@ import Employees from '../views/Employees.vue';
 import Attendance from '../views/Attendance.vue';
 import Reports from '../views/Reports.vue';
 import ChangePasswordPage from '@/views/ChangePasswordPage.vue';
+import ResetPassword from '@/views/ResetPassword.vue';
 
 const routes = [
   { 
@@ -43,6 +44,11 @@ const routes = [
     name: 'ChangePasswordPage', 
     component: ChangePasswordPage, 
     meta: { requiresAuth: true, role: 'employee' }
+  },
+  {
+      path: '/reset-password',
+      name: 'ResetPassword',
+      component: ResetPassword
   }
 ];
 

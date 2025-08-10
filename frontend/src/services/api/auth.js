@@ -79,3 +79,47 @@ export const logoutAdmin = async () => {
     throw error
   }
 }
+
+/**
+ * Gửi yêu cầu reset password đến backend
+ * @param {string} email
+ * @param {string} userType 'admin' | 'employee'
+ * @returns {Promise<any>}
+ */
+export const forgotPassword = async (email, userType) => {
+  try {
+    console.log(`🔑 Forgot password request for ${userType} with email: ${email}`)
+    const response = await api.post('/api/auth/forgot-password', {
+      email,
+      user_type: userType,
+    })
+    console.log('Forgot password request successful:', response.data)
+    return response.data
+  } catch (error) {
+    console.error('Forgot password error:', error.response?.data || error.message)
+    throw error
+  }
+}
+
+/**
+ * Gửi mật khẩu mới và token để reset password
+ * @param {string} token - Token từ URL
+ * @param {string} newPassword
+ * @param {string} confirmPassword
+ * @returns {Promise<any>}
+ */
+export const resetPassword = async (token, newPassword, confirmPassword) => {
+  try {
+    console.log('🔐 Reset password request with token...')
+    const response = await api.post('/api/auth/reset-password', {
+      token,
+      new_password: newPassword,
+      confirm_password: confirmPassword,
+    })
+    console.log('Password reset successful:', response.data)
+    return response.data
+  } catch (error) {
+    console.error('Password reset error:', error.response?.data || error.message)
+    throw error
+  }
+}

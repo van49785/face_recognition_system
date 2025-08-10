@@ -76,12 +76,22 @@
                     :error-messages="errors.adminPassword"
                     variant="outlined"
                     size="large"
-                    class="mb-6"
+                    class="mb-2"
                     hide-details="auto"
                     :rules="passwordRules"
                     autocomplete="current-password"
                     @keyup.enter="handleLogin('admin')"
                   ></v-text-field>
+                </div>
+                
+                <div class="text-right mb-4">
+                  <a
+                    href="#"
+                    class="text-primary text-decoration-none font-weight-medium"
+                    @click.prevent="showForgotPasswordDialog('admin')"
+                  >
+                    Forgot Password?
+                  </a>
                 </div>
 
                 <v-btn
@@ -131,12 +141,22 @@
                     :error-messages="errors.employeePassword"
                     variant="outlined"
                     size="large"
-                    class="mb-6"
+                    class="mb-2"
                     hide-details="auto"
                     :rules="passwordRules"
                     autocomplete="current-password"
                     @keyup.enter="handleLogin('employee')"
                   ></v-text-field>
+                </div>
+                
+                <div class="text-right mb-4">
+                  <a
+                    href="#"
+                    class="text-primary text-decoration-none font-weight-medium"
+                    @click.prevent="showForgotPasswordDialog('employee')"
+                  >
+                    Forgot Password?
+                  </a>
                 </div>
 
                 <v-btn
@@ -185,6 +205,72 @@
           </p>
         </div>
       </v-card>
+      
+      <v-dialog v-model="forgotPasswordDialog" max-width="500" persistent>
+        <v-card rounded="lg" class="pa-4">
+          <v-card-title class="headline text-h5 text-primary font-weight-bold">
+            Forgot Password?
+          </v-card-title>
+          <v-card-text>
+            <p class="mb-4">
+              Enter the email address associated with your {{ forgotPasswordUserType }} account.
+              We'll send you a password reset link.
+            </p>
+
+            <v-alert
+              v-if="forgotPasswordMessage"
+              :type="forgotPasswordMessageType"
+              density="compact"
+              class="mb-4"
+              :closable="!loading"
+              @click:close="forgotPasswordMessage = ''"
+            >
+              {{ forgotPasswordMessage }}
+            </v-alert>
+            
+            <v-form ref="forgotPasswordForm" @submit.prevent="handleForgotPassword">
+              <v-text-field
+                v-model="forgotPasswordEmail"
+                label="Email"
+                type="email"
+                variant="outlined"
+                prepend-inner-icon="mdi-email"
+                required
+                :rules="emailRules"
+                :disabled="hasSentForgotPassword || loading"
+              ></v-text-field>
+            </v-form>
+          </v-card-text>
+          <v-card-actions class="justify-end pa-4">
+            <v-btn
+              text
+              @click="closeForgotPasswordDialog"
+              color="grey"
+              :disabled="loading"
+              v-if="!hasSentForgotPassword"
+            >
+              Cancel
+            </v-btn>
+            <v-btn
+              color="primary"
+              @click="handleForgotPassword"
+              :loading="loading"
+              :disabled="!isForgotPasswordFormValid || loading"
+              v-if="!hasSentForgotPassword"
+            >
+              Send Reset Link
+            </v-btn>
+            <v-btn
+              color="primary"
+              @click="closeForgotPasswordDialog"
+              v-if="hasSentForgotPassword"
+            >
+              OK
+            </v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
+      
     </div>
   </div>
 </template>
@@ -193,14 +279,14 @@
 import '@/assets/css/Login.css';
 import { ref, reactive, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import { useAuthStore } from '../stores/auth'
-import { login, loginEmployee, verify } from '../services/api' 
+import { login, loginEmployee, verify, forgotPassword } from '../services/api/auth'
 import { useRouter } from 'vue-router'
 
 const authStore = useAuthStore()
 const router = useRouter()
 
 // Tab hiện tại
-const activeTab = ref('admin') // Mặc định là Admin Login
+const activeTab = ref('admin')
 
 // Form data (chia tách cho Admin và Employee)
 const form = reactive({
@@ -219,13 +305,13 @@ const errors = reactive({
 
 // Loading states
 const loading = ref(false)
-const connectionError = ref('') // Để hiển thị lỗi kết nối chung
+const connectionError = ref('')
 
 // Form validation
 const showAdminPassword = ref(false)
 const showEmployeePassword = ref(false)
-const adminLoginForm = ref(null) // Ref cho form Admin
-const employeeLoginForm = ref(null) // Ref cho form Employee
+const adminLoginForm = ref(null)
+const employeeLoginForm = ref(null)
 
 // Validation rules
 const usernameRules = [
@@ -238,7 +324,12 @@ const passwordRules = [
   v => v.length >= 6 || 'Password must have at least 3 characters',
 ]
 
-// Computed: Kiểm tra tính hợp lệ của form dựa trên tab đang active
+const emailRules = [
+  v => !!v || 'Email is required',
+  v => /.+@.+\..+/.test(v) || 'E-mail must be valid',
+]
+
+// Computed: Kiểm tra tính hợp lệ của form đăng nhập
 const isFormValid = computed(() => (type) => {
   if (type === 'admin') {
     return form.adminUsername.trim().length >= 3 && 
@@ -252,26 +343,43 @@ const isFormValid = computed(() => (type) => {
   return false
 })
 
+// Computed: Kiểm tra tính hợp lệ của form quên mật khẩu
+const isForgotPasswordFormValid = computed(() => {
+  return /.+@.+\..+/.test(forgotPasswordEmail.value) && forgotPasswordEmail.value.trim() !== ''
+})
+
+// Dialog "Quên mật khẩu"
+const forgotPasswordDialog = ref(false)
+const forgotPasswordEmail = ref('')
+const forgotPasswordUserType = ref('')
+const forgotPasswordForm = ref(null)
+
+// Trạng thái của dialog quên mật khẩu
+const hasSentForgotPassword = ref(false)
+
+// Thông báo trong dialog
+const forgotPasswordMessage = ref('')
+const forgotPasswordMessageType = ref('info')
+
+
 // Lifecycle hooks
 onMounted(async () => {
   document.body.classList.add('login-page')
   
-  // Kiểm tra nếu đã đăng nhập và chuyển hướng phù hợp
   if (authStore.isAuthenticated) {
     try {
       console.log('User is authenticated. Verifying session...')
-      await verify() // Verify current token
+      await verify()
       
-      // Chuyển hướng dựa trên vai trò đã lưu trong store
       if (authStore.user && authStore.user.role) {
         if (authStore.user.role === 'admin') {
           router.push('/') 
           console.log('Redirecting authenticated Admin to dashboard.')
         } else if (authStore.user.role === 'employee') {
-          router.push('/employees') // Chuyển hướng đến trang nhân viên
+          router.push('/employees')
           console.log('Redirecting authenticated Employee to dashboard.')
         } else {
-          router.push('/login') // Mặc định về login nếu vai trò không xác định
+          router.push('/login')
           console.log('Redirecting authenticated user with unknown role to default home.')
         }
       } else {
@@ -280,7 +388,7 @@ onMounted(async () => {
       }
     } catch (error) {
       console.error('Session verification failed:', error)
-      authStore.logout() // Logout nếu token không hợp lệ/hết hạn
+      authStore.logout()
       connectionError.value = 'Your session has been expired or invalid. Please login again.'
     }
   }
@@ -292,7 +400,6 @@ onUnmounted(() => {
 
 // Methods
 const handleLogin = async (userType) => {
-  // Reset errors
   errors.adminUsername = ''
   errors.adminPassword = ''
   errors.employeeUsername = ''
@@ -301,17 +408,13 @@ const handleLogin = async (userType) => {
 
   let isValid = false
   if (userType === 'admin') {
-    // Kiểm tra các quy tắc validation trước khi gọi validate() của form
     if (!isFormValid.value('admin')) {
-      console.log('Admin form is not valid based on basic checks.')
       return
     }
     const { valid } = await adminLoginForm.value.validate()
     isValid = valid
   } else if (userType === 'employee') {
-    // Kiểm tra các quy tắc validation trước khi gọi validate() của form
     if (!isFormValid.value('employee')) {
-      console.log('Employee form is not valid based on basic checks.')
       return
     }
     const { valid } = await employeeLoginForm.value.validate()
@@ -319,15 +422,12 @@ const handleLogin = async (userType) => {
   }
 
   if (!isValid) {
-    console.log('Form validation failed.')
     return
   }
 
   loading.value = true
 
   try {
-    console.log(`🚀 Starting ${userType} login process...`)
-    
     let loginResponse
     let userData = {}
 
@@ -336,92 +436,60 @@ const handleLogin = async (userType) => {
       userData = {
         username: loginResponse.username || form.adminUsername,
         admin_id: loginResponse.admin_id,
-        role: 'admin', // Thêm role
+        role: 'admin',
       }
     } else if (userType === 'employee') {
       loginResponse = await loginEmployee(form.employeeUsername, form.employeePassword)
       userData = {
         employee_id: loginResponse.employee_id,
         full_name: loginResponse.full_name,
-        username: loginResponse.employee_id, // hoặc email, tùy thuộc vào cách bạn muốn hiển thị
-        role: 'employee', // Thêm role
+        username: loginResponse.employee_id,
+        role: 'employee',
         must_change_password: loginResponse.must_change_password,
       }
     }
     
-    console.log('Login successful. Response:', loginResponse)
-    console.log('Saving to store:', { token: loginResponse.token, userData })
     authStore.login(loginResponse.token, userData)
     
-    // Chờ Vue cập nhật DOM và Pinia state
     await nextTick()
     
-    console.log('Verifying login state after store update...')
-    console.log('  - Store token:', authStore.token ? 'Exists' : 'Not exists')
-    console.log('  - Store user:', authStore.user)
-    console.log('  - localStorage token:', localStorage.getItem('token') ? 'Exists' : 'Not exists')
-    console.log('  - localStorage user:', localStorage.getItem('user'))
-    
-    // Verify (optional - để kiểm tra token có hợp lệ không)
     try {
       const verifyResponse = await verify()
-      console.log('Token verified successfully via API:', verifyResponse)
-      // Cập nhật lại user data nếu verify trả về thông tin chi tiết hơn
       if (verifyResponse && verifyResponse.valid) {
         authStore.updateUser({ ...authStore.user, ...verifyResponse })
       }
     } catch (verifyError) {
-      console.warn('Token verification failed after login (this is often okay if token is new):', verifyError.message)
-      // Nếu verify fail, vẫn có thể redirect nếu có token và user data
       if (!authStore.token || !authStore.user) {
         throw new Error('Login failed - no valid token or user data after verification.')
       }
     }
     
-    // Chuyển trang dựa trên vai trò
     if (authStore.user && authStore.user.role) {
       if (authStore.user.role === 'admin') {
         router.push('/') 
-        console.log('Redirecting to Admin dashboard.')
       } else if (authStore.user.role === 'employee') {
-        // Kiểm tra nếu employee cần đổi mật khẩu lần đầu
         if (authStore.user.must_change_password) {
-          router.push('/employee/change-password') // Chuyển hướng đến trang đổi mật khẩu
-          console.log('Redirecting to employee change password page.')
+          router.push('/employee/change-password')
         } else {
-          router.push('/employees') // Trang chủ nhân viên
-          console.log('Redirecting to Employee dashboard.')
+          router.push('/employees')
         }
       } else {
-        router.push('/') // Fallback mặc định
-        console.log('Redirecting to default home (unknown role).')
+        router.push('/')
       }
     } else {
-      console.warn('User role not found after login, redirecting to default home.')
-      router.push('/') // Fallback nếu không có vai trò
+      router.push('/')
     }
     
   } catch (error) {
-    console.error('Login error:', error)
-    
     const msg = error.response?.data?.error ?? error.message ?? 'Đã xảy ra lỗi trong quá trình đăng nhập.'
-    connectionError.value = msg // Hiển thị lỗi chung cho người dùng
+    connectionError.value = msg
     
     if (userType === 'admin') {
-      if (msg.includes('locked') || msg.includes('Invalid username or password')) {
-        errors.adminPassword = msg
-      } else {
-        errors.adminUsername = msg
-      }
+      errors.adminPassword = msg
     } else if (userType === 'employee') {
-      if (msg.includes('locked') || msg.includes('Invalid username or password')) {
-        errors.employeePassword = msg
-      } else {
-        errors.employeeUsername = msg
-      }
+      errors.employeePassword = msg
     }
     
-    // Clear any partial login state
     authStore.logout()
     
   } finally {
@@ -431,5 +499,49 @@ const handleLogin = async (userType) => {
 
 const goToAttendancePage = () => {
   router.push('/attendance')
+}
+
+// Mở dialog quên mật khẩu
+const showForgotPasswordDialog = (userType) => {
+  forgotPasswordUserType.value = userType
+  forgotPasswordEmail.value = ''
+  forgotPasswordMessage.value = ''
+  hasSentForgotPassword.value = false
+  forgotPasswordDialog.value = true
+}
+
+// Đóng dialog quên mật khẩu
+const closeForgotPasswordDialog = () => {
+  forgotPasswordDialog.value = false
+  forgotPasswordEmail.value = ''
+  forgotPasswordMessage.value = ''
+  hasSentForgotPassword.value = false
+}
+
+// Xử lý khi click "Send Reset Link"
+const handleForgotPassword = async () => {
+  if (!isForgotPasswordFormValid.value) {
+    return
+  }
+
+  loading.value = true
+  forgotPasswordMessage.value = ''
+  
+  try {
+    const response = await forgotPassword(forgotPasswordEmail.value, forgotPasswordUserType.value)
+    
+    forgotPasswordMessage.value = response.message
+    forgotPasswordMessageType.value = 'success'
+    hasSentForgotPassword.value = true
+
+  } catch (error) {
+    const msg = error.response?.data?.error ?? 'There was an error sending the email. Please try again.'
+    forgotPasswordMessage.value = msg
+    forgotPasswordMessageType.value = 'error'
+    hasSentForgotPassword.value = false
+
+  } finally {
+    loading.value = false
+  }
 }
 </script>
