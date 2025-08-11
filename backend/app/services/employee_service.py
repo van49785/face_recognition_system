@@ -124,11 +124,12 @@ def get_employees_logic(status_param=None, page=1, limit=10, search='', sort_by=
     """Logic lấy danh sách nhân viên với pagination và search"""
     query = Employee.query
     
-    # Filter theo status
-    if status_param:
-        if status_param.lower() == 'active':
+    # Filter theo status - SỬA LẠI LOGIC NÀY
+    if status_param is not None:
+        # Chuyển đổi string thành boolean
+        if status_param.lower() in ['true', '1', 'active']:
             query = query.filter_by(status=True)
-        elif status_param.lower() == 'inactive':
+        elif status_param.lower() in ['false', '0', 'inactive', 'deleted']:
             query = query.filter_by(status=False)
     
     # Search

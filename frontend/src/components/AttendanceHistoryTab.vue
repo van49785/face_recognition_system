@@ -482,8 +482,6 @@ const employeeDailyHeaders = [
   { title: 'Check-in', key: 'checkin_time', sortable: false },
   { title: 'Check-out', key: 'checkout_time', sortable: false },
   { title: 'Work (h)', key: 'work_hours', sortable: true },
-  { title: 'Late (min)', key: 'late_minutes', sortable: true },
-  { title: 'Early (min)', key: 'early_minutes', sortable: true },
   { title: 'Overtime (h)', key: 'overtime_hours', sortable: true },
   { title: 'Undertime (h)', key: 'undertime_hours', sortable: true },
   { title: 'Status', key: 'status', sortable: true },

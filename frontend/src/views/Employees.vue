@@ -115,15 +115,6 @@
                         <v-icon size="30" color="white">mdi-clock</v-icon>
                       </div>
                     </div>
-                    <div class="metric-card orange">
-                      <div class="metric-content">
-                        <div class="metric-info">
-                          <div class="metric-value">{{ attendanceReport.report?.total_late_minutes }}min</div>
-                          <div class="metric-label">Total Late Minutes</div>
-                        </div>
-                        <v-icon size="30" color="white">mdi-timer-alert</v-icon>
-                      </div>
-                    </div>
                   </div>
 
                   <div class="additional-stats">
@@ -565,9 +556,6 @@ const dailyAttendanceHeaders = [
   { title: 'Check-in', key: 'checkin_time', sortable: false, width: '100px' },
   { title: 'Check-out', key: 'checkout_time', sortable: false, width: '100px' },
   { title: 'Work Hours', key: 'work_hours', sortable: true, width: '100px' },
-  { title: 'Late', key: 'late_minutes', sortable: true, width: '80px' },
-  { title: 'Early', key: 'early_minutes', sortable: true, width: '80px' },
-  { title: 'Overtime', key: 'overtime_hours', sortable: true, width: '100px' },
 ];
 
 // --- Attendance Recovery Request State ---
