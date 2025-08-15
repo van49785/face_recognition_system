@@ -97,14 +97,23 @@ def recognize_face_logic(image_file, base64_image, location, device_info, sessio
 
     # Lấy log chấm công hôm nay
     records_today = Attendance.get_today_records(employee_id=employee_id)
-    statuses = [r.status for r in records_today]
+    
+    # Lấy check-in và check-out records
+    checkin_record = None
+    checkout_record = None
+    
+    for record in records_today:
+        if record.status == "check-in":
+            checkin_record = record
+        elif record.status == "check-out":
+            checkout_record = record
 
     # Kiểm tra policy constraints nếu enabled
     if settings.enable_policies:
-        checkin_count = statuses.count("check-in")
-        checkout_count = statuses.count("check-out")
+        checkin_count = len([r for r in records_today if r.status == "check-in"])
+        checkout_count = len([r for r in records_today if r.status == "check-out"])
         
-        if checkin_count >= settings.max_checkins_per_day and "check-in" not in statuses:
+        if checkin_count >= settings.max_checkins_per_day and not checkin_record:
             return None, {
                 "success": False,
                 "message": f"Maximum check-ins per day ({settings.max_checkins_per_day}) exceeded",
@@ -112,7 +121,7 @@ def recognize_face_logic(image_file, base64_image, location, device_info, sessio
                 "session_id": session_id
             }, 400
             
-        if checkout_count >= settings.max_checkouts_per_day and "check-out" not in statuses:
+        if checkout_count >= settings.max_checkouts_per_day and not checkout_record:
             return None, {
                 "success": False,
                 "message": f"Maximum check-outs per day ({settings.max_checkouts_per_day}) exceeded",
@@ -120,117 +129,153 @@ def recognize_face_logic(image_file, base64_image, location, device_info, sessio
                 "session_id": session_id
             }, 400
 
-    # Xác định trạng thái
-    if "check-in" not in statuses:
-        status = "check-in"
-        
-        # Áp dụng time validation nếu enabled
-        if settings.enable_time_management and settings.enable_time_validation:
-            if current_hour < settings.checkin_start_window:
-                return None, {
-                    "success": False,
-                    "message": f"Check-in not allowed before {settings.checkin_start_window.strftime('%H:%M')}",
-                    "next_valid_time": format_time_vn(datetime.combine(current_date, settings.checkin_start_window)),
-                    "liveness_passed": True,
-                    "session_id": session_id
-                }, 400
-            elif current_hour > settings.checkin_end_window:
-                return None, {
-                    "success": False,
-                    "message": f"Check-in not allowed after {settings.checkin_end_window.strftime('%H:%M')}",
-                    "liveness_passed": True,
-                    "session_id": session_id
-                }, 400
-            elif settings.lunch_start <= current_hour <= settings.lunch_end:
-                attendance_type = "half_day"
-            elif current_hour > settings.start_work:
-                # Kiểm tra grace period
-                grace_minutes = timedelta(minutes=settings.late_arrival_grace_period_minutes)
-                work_start_with_grace = datetime.combine(current_date, settings.start_work) + grace_minutes
-                if current_time <= work_start_with_grace:
-                    attendance_type = "normal"
-                else:
-                    attendance_type = "late"
-            else:
-                attendance_type = "normal"
-        else:
-            # Nếu time management disabled, luôn coi là normal
-            attendance_type = "normal"
-
-    elif "check-out" not in statuses:
-        status = "check-out"
-        checkin_log = next((r for r in records_today if r.status == "check-in"), None)
-        if not checkin_log:
-            return None, {
-                "success": False,
-                "message": "Unexpected error: no check-in log found.",
+    # LOGIC CHẤM CÔNG MỚI
+    try:
+        # Case 5: Đã đủ cả check-in và check-out
+        if checkin_record and checkout_record:
+            return {
+                "success": True,
+                "message": "Already checked in and out today",
+                "records_today": [
+                    {
+                        "status": r.status,
+                        "attendance_type": r.attendance_type,
+                        "timestamp": format_datetime_vn(r.timestamp)
+                    } for r in records_today
+                ],
                 "liveness_passed": True,
                 "session_id": session_id
-            }, 500
+            }, None, 200
 
-        # Kiểm tra minimum work hours nếu enabled
-        if settings.enable_time_management and settings.enable_time_validation:
-            time_diff = current_time - checkin_log.timestamp
-            min_hours = timedelta(hours=settings.minimum_work_hours)
-            if time_diff < min_hours:
-                return None, {
-                    "success": False,
-                    "message": f"Cannot check out yet. Must wait at least {settings.minimum_work_hours} hours after check-in.",
-                    "checked_in_at": format_time_vn(checkin_log.timestamp),
-                    "minimum_checkout_time": format_time_vn(checkin_log.timestamp + min_hours),
-                    "liveness_passed": True,
-                    "session_id": session_id
-                }, 400
-        
-        # Giữ nguyên attendance_type của check-in
-        attendance_type = checkin_log.attendance_type if checkin_log else "normal"
-    else:
-        return {
-            "success": True,
-            "message": "Already checked in and out today.",
-            "records_today": [
-                {
-                    "status": r.status,
-                    "attendance_type": r.attendance_type,
-                    "timestamp": format_datetime_vn(r.timestamp)
-                } for r in records_today
-            ],
-            "liveness_passed": True,
-            "session_id": session_id
-        }, None, 200
+        # Case 1: Check-in bình thường (chưa có check-in)
+        if not checkin_record:
+            # Xác định attendance_type
+            attendance_type = "normal"
+            
+            # Kiểm tra muộn
+            if current_hour > settings.start_work:
+                # Kiểm tra có trong giờ nghỉ trưa không
+                if settings.lunch_start <= current_hour <= settings.lunch_end:
+                    attendance_type = "half_day"
+                else:
+                    attendance_type = "late"
+            
+            # Tạo record check-in
+            attendance = Attendance.create_attendance(
+                employee_id=employee_id,
+                status="check-in",
+                timestamp=current_time,
+                attendance_type=attendance_type
+            )
+            db.session.add(attendance)
+            db.session.commit()
+            
+            return {
+                "success": True,
+                "message": "Attendance recorded successfully",
+                "employee": {
+                    "employee_id": employee_id,
+                    "full_name": full_name,
+                    "department": department
+                },
+                "status": "check-in",
+                "attendance_type": attendance_type,
+                "timestamp": format_datetime_vn(current_time),
+                "liveness_passed": True,
+                "session_id": session_id
+            }, None, 200
 
-    # Ghi log chấm công
-    try:
-        attendance = Attendance.create_attendance(
-            employee_id=employee_id,
-            status=status,
-            timestamp=current_time,
-            attendance_type=attendance_type
-        )
-        db.session.add(attendance)
-        db.session.commit()
-        
-        # SUCCESS RESPONSE - Format chính xác cho frontend
-        return {
-            "success": True,
-            "message": "Attendance recorded successfully",
-            "employee": {
-                "employee_id": employee_id,
-                "full_name": full_name,
-                "department": department
-            },
-            "status": status,
-            "attendance_type": attendance_type,
-            "timestamp": format_datetime_vn(current_time),
-            "liveness_passed": True,
-            "session_id": session_id
-        }, None, 200
-        
+        # Case 2: Check-out bình thường (đã có check-in, chưa có check-out)
+        elif checkin_record and not checkout_record:
+            # Tạo record check-out với attendance_type giống check-in
+            attendance = Attendance.create_attendance(
+                employee_id=employee_id,
+                status="check-out",
+                timestamp=current_time,
+                attendance_type=checkin_record.attendance_type
+            )
+            db.session.add(attendance)
+            db.session.commit()
+            
+            return {
+                "success": True,
+                "message": "Attendance recorded successfully",
+                "employee": {
+                    "employee_id": employee_id,
+                    "full_name": full_name,
+                    "department": department
+                },
+                "status": "check-out",
+                "attendance_type": checkin_record.attendance_type,
+                "timestamp": format_datetime_vn(current_time),
+                "liveness_passed": True,
+                "session_id": session_id
+            }, None, 200
+
+        # Case 3: Quên check-in, chỉ checkout (sau giờ làm việc)
+        elif not checkin_record and current_hour >= settings.end_work:
+            # Tạo record check-out incomplete
+            attendance = Attendance.create_attendance(
+                employee_id=employee_id,
+                status="check-out",
+                timestamp=current_time,
+                attendance_type="incomplete"
+            )
+            db.session.add(attendance)
+            db.session.commit()
+            
+            return {
+                "success": True,
+                "message": "Attendance recorded successfully",
+                "employee": {
+                    "employee_id": employee_id,
+                    "full_name": full_name,
+                    "department": department
+                },
+                "status": "check-out",
+                "attendance_type": "incomplete",
+                "timestamp": format_datetime_vn(current_time),
+                "warning": "Missing check-in record",
+                "liveness_passed": True,
+                "session_id": session_id
+            }, None, 200
+
+        # Case 4: Có check-in, quên check-out (sau giờ làm việc)
+        elif checkin_record and not checkout_record and current_hour >= settings.end_work:
+            # Cập nhật record check-in hiện có thành incomplete
+            checkin_record.attendance_type = "incomplete"
+            db.session.commit()
+            
+            return {
+                "success": True,
+                "message": "Attendance recorded successfully",
+                "employee": {
+                    "employee_id": employee_id,
+                    "full_name": full_name,
+                    "department": department
+                },
+                "status": "check-in",
+                "attendance_type": "incomplete",
+                "timestamp": format_datetime_vn(checkin_record.timestamp),
+                "warning": "Missing check-out record",
+                "liveness_passed": True,
+                "session_id": session_id
+            }, None, 200
+
+        # Trường hợp khác: Không xác định được hành động
+        else:
+            return None, {
+                "success": False,
+                "message": "Cannot determine attendance action at this time",
+                "liveness_passed": True,
+                "session_id": session_id
+            }, 400
+
     except Exception as e:
         db.session.rollback()
         return None, {
             "success": False,
-            "message": f"Failed to record attendance: {str(e)}",
+            "message": f"Database error: {str(e)}",
             "liveness_passed": True,
             "session_id": session_id
         }, 500

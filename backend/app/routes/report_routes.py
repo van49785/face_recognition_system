@@ -4,7 +4,7 @@ from app.services.report_service import (
     get_employee_report_enhanced, 
     get_department_report_enhanced, 
     export_to_excel_enhanced,
-    COMPANY_CONFIG
+    get_company_settings  # THAY ĐỔI: import function mới thay vì COMPANY_CONFIG
 )
 from app.utils.helpers import get_export_path
 from app.utils.decorators import employee_required, admin_required
@@ -104,12 +104,15 @@ def download_exported_file(filename):
 
 @report_bp.route('/api/reports/company-config', methods=['GET'])
 @admin_required
-def get_company_config():
+def get_company_config_route():  # THAY ĐỔI: đổi tên function để tránh conflict
     """Lấy cấu hình quy định công ty"""
     try:
+        # THAY ĐỔI: Gọi function thay vì dùng constant
+        company_config = get_company_settings()
+        
         # Chuyển đổi time objects thành string
         config = {}
-        for key, value in COMPANY_CONFIG.items():
+        for key, value in company_config.items():
             if hasattr(value, 'strftime'):
                 config[key] = value.strftime('%H:%M')
             else:
