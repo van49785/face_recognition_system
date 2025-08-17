@@ -58,7 +58,7 @@ This project is a modern attendance management system that integrates face recog
 - **Python 3.8+**
 - **Flask**: A microframework for web development
 - **SQLAlchemy**: An Object-Relational Mapper (ORM) for database interaction
-- **face_recognition**: A library for face recognition
+- **OpenCV**: A library for image processing
 - **dlib**: A machine learning toolkit for various facial processing tasks
 - **insightface**: A high-performance face recognition library
 - **pytz**: For timezone handling
