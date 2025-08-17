@@ -7,7 +7,7 @@ app = create_app()
 with app.app_context():
     username = "admin1"
     password = "123456"
-    email = "admin1@example.com"
+    email = "van49785@gmail.com"
     role = "admin"  # hoặc 'superadmin' nếu bạn có phân quyền
 
     # Kiểm tra admin đã tồn tại chưa

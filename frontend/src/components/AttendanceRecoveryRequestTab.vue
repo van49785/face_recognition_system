@@ -93,7 +93,6 @@
       </v-card>
     </div>
 
-    <!-- Confirmation Dialog -->
     <v-dialog v-model="dialogConfirm" max-width="500px">
       <v-card class="rounded-xl">
         <v-card-title class="text-h5 text-center pt-5">Confirm Action</v-card-title>
@@ -125,7 +124,6 @@
       </v-card>
     </v-dialog>
 
-    <!-- Success/Error Snackbar -->
     <v-snackbar
       v-model="snackbar.show"
       :color="snackbar.color"
@@ -138,7 +136,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed, defineExpose, defineEmits, watch } from 'vue';
 import { processRecoveryRequest, getAllRecoveryRequests } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'; 
 import dayjs from 'dayjs'
@@ -147,6 +145,9 @@ import '@/assets/css/AttendanceRecoveryRequestTab.css';
 
 const authStore = useAuthStore();
 dayjs.extend(customParseFormat)
+
+// Define emits
+const emit = defineEmits(['pending-count-updated']);
 
 const headers = [
   { title: 'Employee ID', key: 'employee_id', sortable: true },
@@ -176,11 +177,16 @@ const snackbar = ref({
   timeout: 3000,
 });
 
+// Computed property để tính toán số lượng yêu cầu đang chờ xử lý
+const pendingCount = computed(() => {
+  return allRequests.value.filter(request => request.status === 'pending').length;
+});
+
 const fetchAllRequests = async () => {
   loading.value = true;
   errorMessage.value = '';
   try {
-    const response = await getAllRecoveryRequests(); // Gọi API mới
+    const response = await getAllRecoveryRequests(); 
     allRequests.value = response;
   } catch (error) {
     errorMessage.value = error.response?.data?.error || 'Failed to fetch all requests.';
@@ -202,8 +208,6 @@ const processRequest = async () => {
   processing.value = true;
   errorMessage.value = '';
   try {
-    
-    // DEBUG: In ra dữ liệu sẽ gửi
     const requestData = {
       request_id: selectedRequest.value.request_id,
       approved: actionType.value === 'approved',
@@ -217,7 +221,6 @@ const processRequest = async () => {
     fetchAllRequests(); // Refresh list
     
   } catch (error) {
-    
     errorMessage.value = error.response?.data?.error || 'Failed to process request.';
     snackbar.value = { show: true, message: errorMessage.value, color: 'error' };
   } finally {
@@ -225,7 +228,7 @@ const processRequest = async () => {
   }
 };
 
-// Helper for date formatting (optional, can use a global utility if available)
+// Helper for date formatting
 const formatDateTime = (input) => {
   if (!input) return '';
   const parsed = dayjs(input, 'DD/MM/YYYY HH:mm:ss');
@@ -267,4 +270,43 @@ const getStatusText = (status) => {
 onMounted(() => {
   fetchAllRequests();
 });
+
+// Expose pendingCount để component cha có thể access
+defineExpose({
+  pendingCount
+});
+
+// Watch pendingCount và emit event khi thay đổi
+watch(pendingCount, (newCount) => {
+  emit('pending-count-updated', newCount);
+}, { immediate: true });
 </script>
+
+<style scoped>
+.notification-badge {
+  animation: none;
+}
+
+.pulse-animation {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.panel-title {
+  position: relative;
+}
+</style>

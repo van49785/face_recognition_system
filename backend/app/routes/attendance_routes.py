@@ -7,57 +7,193 @@ from app.services.attendance_service import (
     get_today_attendance_logic,
     capture_face_training_logic
 )
-from app.services.attendance_service import get_attendance_history_logic 
-from app.utils.decorators import admin_required, employee_required # THÊM employee_required
+from app.utils.decorators import admin_required, employee_required
 
 # Khởi tạo Blueprint cho các route chấm công
-attendance_bp = Blueprint('attendance_bp', __name__) # ĐỔI TÊN BIẾN TỪ 'attendance' THÀNH 'attendance_bp'
+attendance_bp = Blueprint('attendance_bp', __name__)
 
 @attendance_bp.route('/api/recognize', methods=['POST'])
 def recognize_face():
     """Nhận diện khuôn mặt và ghi nhận chấm công"""
-    image_file = request.files.get('image')
-    base64_image = request.form.get('base64_image')
-    location = request.form.get('location')
-    device_info = request.form.get('device_info')
-    session_id = request.form.get('session_id') # THÊM DÒNG NÀY ĐỂ LẤY session_id TỪ REQUEST
-    
-    # THÊM session_id VÀO HÀM GỌI recognize_face_logic
-    result, error, status = recognize_face_logic(image_file, base64_image, location, device_info, session_id)
-    if error:
-        return jsonify(error), status
-    return jsonify(result), status
+    try:
+        # Kiểm tra content type để xử lý đúng format
+        if request.is_json:
+            # Xử lý JSON data từ frontend Vue.js
+            data = request.get_json()
+            image_file = None
+            base64_image = data.get('base64_image')
+            location = data.get('location')
+            device_info = data.get('device_info')
+            session_id = data.get('session_id')
+        else:
+            # Xử lý FormData (cho các request khác)
+            image_file = request.files.get('image')
+            base64_image = request.form.get('base64_image')
+            location = request.form.get('location')
+            device_info = request.form.get('device_info')
+            session_id = request.form.get('session_id')
+
+        # Validation
+        if not base64_image and not image_file:
+            return jsonify({
+                'success': False,
+                'message': 'No image data provided',
+                'liveness_passed': False
+            }), 400
+
+        if not session_id:
+            return jsonify({
+                'success': False,
+                'message': 'Session ID is required',
+                'liveness_passed': False
+            }), 400
+
+        # Gọi logic xử lý
+        result, error, status = recognize_face_logic(
+            image_file, 
+            base64_image, 
+            location, 
+            device_info, 
+            session_id
+        )
+        
+        if error:
+            # Đảm bảo error response có format chuẩn
+            if isinstance(error, dict):
+                return jsonify(error), status
+            else:
+                return jsonify({
+                    'success': False,
+                    'message': str(error),
+                    'liveness_passed': False
+                }), status
+        
+        # Đảm bảo success response có format chuẩn
+        if isinstance(result, dict):
+            # Thêm success flag nếu chưa có
+            if 'success' not in result:
+                result['success'] = True
+            return jsonify(result), status
+        else:
+            return jsonify({
+                'success': True,
+                'message': str(result),
+                'liveness_passed': True
+            }), status
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Server error: {str(e)}',
+            'liveness_passed': False
+        }), 500
 
 @attendance_bp.route('/api/attendance/<string:employee_id>', methods=['GET'])
 def get_attendance_history(employee_id):
     """Lấy lịch sử chấm công của nhân viên"""
-    # LƯU Ý: Route này hiện tại không yêu cầu xác thực. 
-    # Nếu bạn muốn chỉ nhân viên đã đăng nhập mới xem được lịch sử của mình, 
-    # bạn sẽ cần tạo một route riêng cho nhân viên và áp dụng @employee_required.
-    # Route này có thể dùng cho Admin xem lịch sử của bất kỳ nhân viên nào.
-    result, error, status = get_attendance_history_logic(employee_id)
-    if error:
-        return jsonify(error), status
-    return jsonify(result), status
+    try:
+        result, error, status = get_attendance_history_logic(employee_id)
+        if error:
+            if isinstance(error, dict):
+                return jsonify(error), status
+            else:
+                return jsonify({
+                    'success': False,
+                    'message': str(error)
+                }), status
+        
+        # Đảm bảo response có format chuẩn
+        if isinstance(result, dict):
+            if 'success' not in result:
+                result['success'] = True
+            return jsonify(result), status
+        else:
+            return jsonify({
+                'success': True,
+                'data': result
+            }), status
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Server error: {str(e)}'
+        }), 500
 
 @attendance_bp.route('/api/attendance/today/<string:employee_id>', methods=['GET'])
 def get_today_attendance(employee_id):
     """Lấy chấm công hôm nay của nhân viên"""
-    result, error, status = get_today_attendance_logic(employee_id)
-    if error:
-        return jsonify(error), status
-    return jsonify(result), status
+    try:
+        result, error, status = get_today_attendance_logic(employee_id)
+        if error:
+            if isinstance(error, dict):
+                return jsonify(error), status
+            else:
+                return jsonify({
+                    'success': False,
+                    'message': str(error)
+                }), status
+        
+        if isinstance(result, dict):
+            if 'success' not in result:
+                result['success'] = True
+            return jsonify(result), status
+        else:
+            return jsonify({
+                'success': True,
+                'data': result
+            }), status
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Server error: {str(e)}'
+        }), 500
 
 @attendance_bp.route('/api/face-training/capture', methods=['POST'])
 def capture_face_training():
     """Capture ảnh training cho nhân viên"""
-    image_file = request.files.get('image')
-    base64_image = request.form.get('base64_image')
-    employee_id = request.form.get('employee_id')
-    pose_type = request.form.get('pose_type')
-    
-    result, error, status = capture_face_training_logic(image_file, base64_image, employee_id, pose_type)
-    if error:
-        return jsonify(error), status
-    return jsonify(result), status
+    try:
+        # Xử lý cả JSON và FormData
+        if request.is_json:
+            data = request.get_json()
+            image_file = None
+            base64_image = data.get('base64_image')
+            employee_id = data.get('employee_id')
+            pose_type = data.get('pose_type')
+        else:
+            image_file = request.files.get('image')
+            base64_image = request.form.get('base64_image')
+            employee_id = request.form.get('employee_id')
+            pose_type = request.form.get('pose_type')
 
+        result, error, status = capture_face_training_logic(
+            image_file, 
+            base64_image, 
+            employee_id, 
+            pose_type
+        )
+        
+        if error:
+            if isinstance(error, dict):
+                return jsonify(error), status
+            else:
+                return jsonify({
+                    'success': False,
+                    'message': str(error)
+                }), status
+        
+        if isinstance(result, dict):
+            if 'success' not in result:
+                result['success'] = True
+            return jsonify(result), status
+        else:
+            return jsonify({
+                'success': True,
+                'data': result
+            }), status
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Server error: {str(e)}'
+        }), 500

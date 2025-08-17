@@ -1,4 +1,4 @@
-# backend/app/services/attendance_service.py 
+# backend/app/services/attendance_service.py - FIXED RESPONSE FORMAT
 
 from datetime import datetime, timedelta, time
 import pytz
@@ -20,7 +20,19 @@ def recognize_face_logic(image_file, base64_image, location, device_info, sessio
     """Logic nhận diện khuôn mặt và ghi nhận chấm công với settings validation"""
     # Kiểm tra đầu vào
     if not image_file and not base64_image:
-        return None, {"error": "No image provided"}, 400
+        return None, {
+            "success": False,
+            "message": "No image provided", 
+            "liveness_passed": False
+        }, 400
+
+    # Kiểm tra session_id
+    if not session_id:
+        return None, {
+            "success": False,
+            "message": "Session ID is required",
+            "liveness_passed": False
+        }, 400
 
     # Lấy settings hiện tại
     settings = Settings.get_current_settings()
@@ -37,16 +49,42 @@ def recognize_face_logic(image_file, base64_image, location, device_info, sessio
         nparr = np.frombuffer(raw_bytes, np.uint8)
         image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         if image is None:
-            return None, {"error": "Cannot decode image"}, 400
-    except Exception:
-        return None, {"error": "Invalid image input"}, 400
+            return None, {
+                "success": False,
+                "message": "Cannot decode image",
+                "liveness_passed": False
+            }, 400
+    except Exception as e:
+        return None, {
+            "success": False,
+            "message": f"Invalid image input: {str(e)}",
+            "liveness_passed": False
+        }, 400
 
-    # Nhận diện khuôn mặt
+    # Nhận diện khuôn mặt WITH LIVENESS
     success, message, employee = FacialRecognitionService.recognize_face_with_liveness(image, session_id)
+    
+    # CRITICAL: Kiểm tra liveness trước
     if not success:
-        return None, {"error": message}, 400
+        # Xác định xem có phải lỗi liveness không
+        is_liveness_error = any(keyword in message.lower() for keyword in [
+            'blink', 'smile', 'head', 'liveness', 'lighting', 'face'
+        ])
+        
+        return None, {
+            "success": False,
+            "message": message,
+            "liveness_passed": not is_liveness_error,
+            "session_id": session_id
+        }, 200  # 200 vì đây là response bình thường cho liveness check
+
     if not employee:
-        return None, {"error": "Employee not found from face recognition"}, 404
+        return None, {
+            "success": False,
+            "message": "Employee not found from face recognition",
+            "liveness_passed": True,  # Liveness OK nhưng không nhận diện được
+            "session_id": session_id
+        }, 200
 
     employee_id = employee.employee_id
     full_name = employee.full_name
@@ -59,119 +97,200 @@ def recognize_face_logic(image_file, base64_image, location, device_info, sessio
 
     # Lấy log chấm công hôm nay
     records_today = Attendance.get_today_records(employee_id=employee_id)
-    statuses = [r.status for r in records_today]
+    
+    # Lấy check-in và check-out records
+    checkin_record = None
+    checkout_record = None
+    
+    for record in records_today:
+        if record.status == "check-in":
+            checkin_record = record
+        elif record.status == "check-out":
+            checkout_record = record
 
     # Kiểm tra policy constraints nếu enabled
     if settings.enable_policies:
-        checkin_count = statuses.count("check-in")
-        checkout_count = statuses.count("check-out")
+        checkin_count = len([r for r in records_today if r.status == "check-in"])
+        checkout_count = len([r for r in records_today if r.status == "check-out"])
         
-        if checkin_count >= settings.max_checkins_per_day and "check-in" not in statuses:
+        if checkin_count >= settings.max_checkins_per_day and not checkin_record:
             return None, {
-                "error": f"Maximum check-ins per day ({settings.max_checkins_per_day}) exceeded"
+                "success": False,
+                "message": f"Maximum check-ins per day ({settings.max_checkins_per_day}) exceeded",
+                "liveness_passed": True,
+                "session_id": session_id
             }, 400
             
-        if checkout_count >= settings.max_checkouts_per_day and "check-out" not in statuses:
+        if checkout_count >= settings.max_checkouts_per_day and not checkout_record:
             return None, {
-                "error": f"Maximum check-outs per day ({settings.max_checkouts_per_day}) exceeded"
+                "success": False,
+                "message": f"Maximum check-outs per day ({settings.max_checkouts_per_day}) exceeded",
+                "liveness_passed": True,
+                "session_id": session_id
             }, 400
 
-    # Xác định trạng thái
-    if "check-in" not in statuses:
-        status = "check-in"
-        
-        # Áp dụng time validation nếu enabled
-        if settings.enable_time_management and settings.enable_time_validation:
-            if current_hour < settings.checkin_start_window:
-                return None, {
-                    "error": f"Check-in not allowed before {settings.checkin_start_window.strftime('%H:%M')}",
-                    "next_valid_time": format_time_vn(datetime.combine(current_date, settings.checkin_start_window))
-                }, 400
-            elif current_hour > settings.checkin_end_window:
-                return None, {
-                    "error": f"Check-in not allowed after {settings.checkin_end_window.strftime('%H:%M')}"
-                }, 400
-            elif settings.lunch_start <= current_hour <= settings.lunch_end:
-                attendance_type = "half_day"
-            elif current_hour > settings.start_work:
-                # Kiểm tra grace period
-                grace_minutes = timedelta(minutes=settings.late_arrival_grace_period_minutes)
-                work_start_with_grace = datetime.combine(current_date, settings.start_work) + grace_minutes
-                if current_time <= work_start_with_grace:
-                    attendance_type = "normal"
+    # LOGIC CHẤM CÔNG MỚI
+    try:
+        # Case 5: Đã đủ cả check-in và check-out
+        if checkin_record and checkout_record:
+            return {
+                "success": True,
+                "message": "Already checked in and out today",
+                "records_today": [
+                    {
+                        "status": r.status,
+                        "attendance_type": r.attendance_type,
+                        "timestamp": format_datetime_vn(r.timestamp)
+                    } for r in records_today
+                ],
+                "liveness_passed": True,
+                "session_id": session_id
+            }, None, 200
+
+        # Case 1: Check-in bình thường (chưa có check-in)
+        if not checkin_record:
+            # Xác định attendance_type
+            attendance_type = "normal"
+            
+            # Kiểm tra muộn
+            if current_hour > settings.start_work:
+                # Kiểm tra có trong giờ nghỉ trưa không
+                if settings.lunch_start <= current_hour <= settings.lunch_end:
+                    attendance_type = "half_day"
                 else:
                     attendance_type = "late"
-            else:
-                attendance_type = "normal"
+            
+            # Tạo record check-in
+            attendance = Attendance.create_attendance(
+                employee_id=employee_id,
+                status="check-in",
+                timestamp=current_time,
+                attendance_type=attendance_type
+            )
+            db.session.add(attendance)
+            db.session.commit()
+            
+            return {
+                "success": True,
+                "message": "Attendance recorded successfully",
+                "employee": {
+                    "employee_id": employee_id,
+                    "full_name": full_name,
+                    "department": department
+                },
+                "status": "check-in",
+                "attendance_type": attendance_type,
+                "timestamp": format_datetime_vn(current_time),
+                "liveness_passed": True,
+                "session_id": session_id
+            }, None, 200
+
+        # Case 2: Check-out bình thường (đã có check-in, chưa có check-out)
+        elif checkin_record and not checkout_record:
+            # Tạo record check-out với attendance_type giống check-in
+            attendance = Attendance.create_attendance(
+                employee_id=employee_id,
+                status="check-out",
+                timestamp=current_time,
+                attendance_type=checkin_record.attendance_type
+            )
+            db.session.add(attendance)
+            db.session.commit()
+            
+            return {
+                "success": True,
+                "message": "Attendance recorded successfully",
+                "employee": {
+                    "employee_id": employee_id,
+                    "full_name": full_name,
+                    "department": department
+                },
+                "status": "check-out",
+                "attendance_type": checkin_record.attendance_type,
+                "timestamp": format_datetime_vn(current_time),
+                "liveness_passed": True,
+                "session_id": session_id
+            }, None, 200
+
+        # Case 3: Quên check-in, chỉ checkout (sau giờ làm việc)
+        elif not checkin_record and current_hour >= settings.end_work:
+            # Tạo record check-out incomplete
+            attendance = Attendance.create_attendance(
+                employee_id=employee_id,
+                status="check-out",
+                timestamp=current_time,
+                attendance_type="incomplete"
+            )
+            db.session.add(attendance)
+            db.session.commit()
+            
+            return {
+                "success": True,
+                "message": "Attendance recorded successfully",
+                "employee": {
+                    "employee_id": employee_id,
+                    "full_name": full_name,
+                    "department": department
+                },
+                "status": "check-out",
+                "attendance_type": "incomplete",
+                "timestamp": format_datetime_vn(current_time),
+                "warning": "Missing check-in record",
+                "liveness_passed": True,
+                "session_id": session_id
+            }, None, 200
+
+        # Case 4: Có check-in, quên check-out (sau giờ làm việc)
+        elif checkin_record and not checkout_record and current_hour >= settings.end_work:
+            # Cập nhật record check-in hiện có thành incomplete
+            checkin_record.attendance_type = "incomplete"
+            db.session.commit()
+            
+            return {
+                "success": True,
+                "message": "Attendance recorded successfully",
+                "employee": {
+                    "employee_id": employee_id,
+                    "full_name": full_name,
+                    "department": department
+                },
+                "status": "check-in",
+                "attendance_type": "incomplete",
+                "timestamp": format_datetime_vn(checkin_record.timestamp),
+                "warning": "Missing check-out record",
+                "liveness_passed": True,
+                "session_id": session_id
+            }, None, 200
+
+        # Trường hợp khác: Không xác định được hành động
         else:
-            # Nếu time management disabled, luôn coi là normal
-            attendance_type = "normal"
+            return None, {
+                "success": False,
+                "message": "Cannot determine attendance action at this time",
+                "liveness_passed": True,
+                "session_id": session_id
+            }, 400
 
-    elif "check-out" not in statuses:
-        status = "check-out"
-        checkin_log = next((r for r in records_today if r.status == "check-in"), None)
-        if not checkin_log:
-            return None, {"error": "Unexpected error: no check-in log found."}, 500
-
-        # Kiểm tra minimum work hours nếu enabled
-        if settings.enable_time_management and settings.enable_time_validation:
-            time_diff = current_time - checkin_log.timestamp
-            min_hours = timedelta(hours=settings.minimum_work_hours)
-            if time_diff < min_hours:
-                return None, {
-                    "error": f"Cannot check out yet. Must wait at least {settings.minimum_work_hours} hours after check-in.",
-                    "checked_in_at": format_time_vn(checkin_log.timestamp),
-                    "minimum_checkout_time": format_time_vn(checkin_log.timestamp + min_hours)
-                }, 400
-        
-        # Giữ nguyên attendance_type của check-in
-        attendance_type = checkin_log.attendance_type if checkin_log else "normal"
-    else:
-        return {
-            "message": "Already checked in and out today.",
-            "records_today": [
-                {
-                    "status": r.status,
-                    "attendance_type": r.attendance_type,
-                    "timestamp": format_datetime_vn(r.timestamp)
-                } for r in records_today
-            ]
-        }, None, 200
-
-    # Ghi log chấm công
-    try:
-        attendance = Attendance.create_attendance(
-            employee_id=employee_id,
-            status=status,
-            timestamp=current_time,
-            attendance_type=attendance_type
-        )
-        db.session.add(attendance)
-        db.session.commit()
-        
-        return {
-            "message": "Attendance recorded successfully",
-            "employee": {
-                "employee_id": employee_id,
-                "full_name": full_name,
-                "department": department
-            },
-            "status": status,
-            "attendance_type": attendance_type,
-            "timestamp": format_datetime_vn(current_time)
-        }, None, 200
     except Exception as e:
         db.session.rollback()
-        return None, {"error": f"Failed to record attendance: {str(e)}"}, 500
+        return None, {
+            "success": False,
+            "message": f"Database error: {str(e)}",
+            "liveness_passed": True,
+            "session_id": session_id
+        }, 500
 
 def get_attendance_history_logic(employee_id):
     """Lấy lịch sử chấm công của nhân viên"""
     employee = Employee.query.filter_by(employee_id=employee_id.upper()).first()
     if not employee:
-        return None, {"error": "Employee not found"}, 404
+        return None, {
+            "success": False,
+            "message": "Employee not found"
+        }, 404
     
     records = Attendance.query.filter_by(employee_id=employee_id.upper())\
-        .order_by(Attendance.timestamp.desc()).limit(50).all() # Giữ nguyên limit 50 hoặc làm pagination ở đây
+        .order_by(Attendance.timestamp.desc()).limit(50).all()
     
     result = []
     for record in records:
@@ -183,6 +302,7 @@ def get_attendance_history_logic(employee_id):
         })
     
     return {
+        "success": True,
         "employee": {
             "employee_id": employee.employee_id,
             "full_name": employee.full_name
@@ -195,7 +315,10 @@ def get_today_attendance_logic(employee_id):
     """Lấy chấm công hôm nay của nhân viên"""
     employee = Employee.query.filter_by(employee_id=employee_id.upper()).first()
     if not employee:
-        return None, {"error": "Employee not found"}, 404
+        return None, {
+            "success": False,
+            "message": "Employee not found"
+        }, 404
     
     records_today = Attendance.get_today_records(employee_id=employee_id.upper())
     
@@ -216,6 +339,7 @@ def get_today_attendance_logic(employee_id):
         current_status = "completed"
     
     return {
+        "success": True,
         "employee": {
             "employee_id": employee.employee_id,
             "full_name": employee.full_name
@@ -228,21 +352,36 @@ def get_today_attendance_logic(employee_id):
 def capture_face_training_logic(image_file, base64_image, employee_id, pose_type):
     """Logic capture ảnh training cho nhân viên"""
     if not employee_id:
-        return None, {"error": "Missing employee_id"}, 400
+        return None, {
+            "success": False,
+            "message": "Missing employee_id"
+        }, 400
     if not image_file and not base64_image:
-        return None, {"error": "No image provided"}, 400
+        return None, {
+            "success": False,
+            "message": "No image provided"
+        }, 400
     if not pose_type:
-        return None, {"error": "Missing pose_type"}, 400
+        return None, {
+            "success": False,
+            "message": "Missing pose_type"
+        }, 400
 
     # Validate pose_type
     try:
         FaceTrainingData.validate_pose_type(pose_type)
     except ValueError as e:
-        return None, {"error": str(e)}, 400
+        return None, {
+            "success": False,
+            "message": str(e)
+        }, 400
 
     employee = Employee.query.filter_by(employee_id=employee_id.upper()).first()
     if not employee:
-        return None, {"error": "Employee not found"}, 404
+        return None, {
+            "success": False,
+            "message": "Employee not found"
+        }, 404
 
     # Đọc & chuẩn hóa ảnh
     try:
@@ -256,25 +395,37 @@ def capture_face_training_logic(image_file, base64_image, employee_id, pose_type
         nparr = np.frombuffer(raw_bytes, np.uint8)
         img_cv = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         if img_cv is None:
-            return None, {"error": "Cannot decode image"}, 400
+            return None, {
+                "success": False,
+                "message": "Cannot decode image"
+            }, 400
 
         ok, buf = cv2.imencode(".jpg", img_cv, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
         if not ok:
-            return None, {"error": "Failed to encode image"}, 400
+            return None, {
+                "success": False,
+                "message": "Failed to encode image"
+            }, 400
         image_data = BytesIO(buf.tobytes())
     except (base64.binascii.Error, ValueError) as e:
-        return None, {"error": f"Image processing error: {str(e)}"}, 400
+        return None, {
+            "success": False,
+            "message": f"Image processing error: {str(e)}"
+        }, 400
 
-    # FIXED: Sinh face-encoding & metadata với employee_id
+    # Sinh face-encoding & metadata với employee_id
     success, message, encoding, metadata = (
         FacialRecognitionService.generate_face_encoding_with_metadata(
             image_data, 
-            pose_type=pose_type,           # Named parameter
-            employee_id=employee_id.upper()  # Named parameter - QUAN TRỌNG!
+            pose_type=pose_type,
+            employee_id=employee_id.upper()
         )
     )
     if not success:
-        return None, {"error": message}, 400
+        return None, {
+            "success": False,
+            "message": message
+        }, 400
 
     # Lưu ảnh gốc
     try:
@@ -282,28 +433,27 @@ def capture_face_training_logic(image_file, base64_image, employee_id, pose_type
         img_pil = Image.open(image_data).convert("RGB")
         save_dir = get_upload_path()
         os.makedirs(save_dir, exist_ok=True)
-        # FIX: Sửa lỗi typo employeeid -> employee_id
         save_path = os.path.join(save_dir, f"{employee_id}_{metadata['pose_type']}.jpg")
         img_pil.save(save_path, quality=90)
     except Exception as e:
-        return None, {"error": f"Save image failed: {str(e)}"}, 500
+        return None, {
+            "success": False,
+            "message": f"Save image failed: {str(e)}"
+        }, 500
 
     # Ghi dữ liệu training
     try:
-        # IMPROVED: Kiểm tra và thay thế pose existing nếu có
         existing_training = FaceTrainingData.query.filter_by(
             employee_id=employee_id.upper(), 
             pose_type=metadata['pose_type']
         ).first()
         
         if existing_training:
-            # Cập nhật pose hiện có
             existing_training.face_encoding = encoding
             existing_training.image_quality_score = metadata['image_quality_score']
             existing_training.created_at = datetime.now(pytz.timezone("Asia/Ho_Chi_Minh")).replace(tzinfo=None)
             print(f"Cập nhật pose {metadata['pose_type']} cho {employee_id}")
         else:
-            # Tạo pose mới
             training_data = FaceTrainingData.create_training_data(
                 employee_id=employee_id.upper(),
                 pose_type=metadata['pose_type'],
@@ -314,17 +464,17 @@ def capture_face_training_logic(image_file, base64_image, employee_id, pose_type
             print(f"Tạo pose mới {metadata['pose_type']} cho {employee_id}")
         
         db.session.commit()
-        
-        # Refresh progress sau khi commit
         updated_progress = employee.get_face_training_progress()
         
-        # Log để debug
         print(f"Progress của {employee_id}: {updated_progress['poses_completed']}/{updated_progress['poses_required']} - Completed: {employee.face_training_completed}")
         
     except Exception as e:
         db.session.rollback()
         print(f"Database error: {e}")
-        return None, {"error": f"Database error: {str(e)}"}, 500
+        return None, {
+            "success": False,
+            "message": f"Database error: {str(e)}"
+        }, 500
 
     return {
         "success": True,

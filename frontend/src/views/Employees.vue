@@ -115,15 +115,6 @@
                         <v-icon size="30" color="white">mdi-clock</v-icon>
                       </div>
                     </div>
-                    <div class="metric-card orange">
-                      <div class="metric-content">
-                        <div class="metric-info">
-                          <div class="metric-value">{{ attendanceReport.report?.total_late_minutes }}min</div>
-                          <div class="metric-label">Total Late Minutes</div>
-                        </div>
-                        <v-icon size="30" color="white">mdi-timer-alert</v-icon>
-                      </div>
-                    </div>
                   </div>
 
                   <div class="additional-stats">
@@ -194,6 +185,7 @@
                   </div>
                 </div>
 
+                <!-- Cập nhật phần table trong Daily Details tab -->
                 <div class="table-container">
                   <v-data-table
                     :headers="dailyAttendanceHeaders"
@@ -211,39 +203,50 @@
                     </template>
                     
                     <template v-slot:item.date="{ item }">
-                      <div class="date-cell">{{ formatDisplayDate(item.date) }}</div>
+                      <div class="date-cell">
+                        <strong>{{ formatSimpleDate(item.date) }}</strong>
+                      </div>
                     </template>
                     
                     <template v-slot:item.status="{ item }">
                       <v-chip :color="getStatusColor(item.status)" label small>
-                        {{ item.status }}
+                        {{ formatStatus(item.status) }}
                       </v-chip>
                     </template>
                     
                     <template v-slot:item.attendance_type="{ item }">
                       <v-chip 
-                        v-if="item.attendance_type !== 'absent'" 
+                        v-if="item.attendance_type && item.attendance_type !== 'absent'" 
                         :color="getAttendanceTypeColor(item.attendance_type)" 
                         label 
                         small
                       >
-                        {{ item.attendance_type }}
+                        {{ formatAttendanceType(item.attendance_type) }}
                       </v-chip>
                       <span v-else class="text-disabled">-</span>
                     </template>
                     
                     <template v-slot:item.checkin_time="{ item }">
-                      <span v-if="item.checkin_time" class="time-cell">{{ item.checkin_time }}</span>
+                      <span v-if="item.checkin_time && item.attendance_type !== 'recovered'" class="time-cell">{{ item.checkin_time }}</span>
+                      <span v-else-if="item.attendance_type === 'recovered'" class="text-teal">
+                        <small><em>{{ getRecoveredTime('checkin') }}*</em></small>
+                      </span>
                       <span v-else class="text-disabled">-</span>
                     </template>
-                    
+                      
                     <template v-slot:item.checkout_time="{ item }">
-                      <span v-if="item.checkout_time" class="time-cell">{{ item.checkout_time }}</span>
+                      <span v-if="item.checkout_time && item.attendance_type !== 'recovered'" class="time-cell">{{ item.checkout_time }}</span>
+                      <span v-else-if="item.attendance_type === 'recovered'" class="text-teal">
+                        <small><em>{{ getRecoveredTime('checkout') }}*</em></small>
+                      </span>
                       <span v-else class="text-disabled">-</span>
                     </template>
                     
                     <template v-slot:item.work_hours="{ item }">
-                      <span v-if="item.work_hours > 0" class="hours-cell">{{ item.work_hours }}h</span>
+                      <span v-if="item.work_hours > 0" class="hours-cell">
+                        {{ item.work_hours }}h
+                        <span v-if="item.attendance_type === 'recovered'" class="text-teal">*</span>
+                      </span>
                       <span v-else class="text-disabled">-</span>
                     </template>
                     
@@ -282,7 +285,31 @@
                       </v-chip>
                       <span v-else class="text-disabled">-</span>
                     </template>
+
+                    <template v-slot:item.notes="{ item }">
+                      <span 
+                        v-if="item.notes && item.notes !== 'Normal'" 
+                        class="notes-cell"
+                        :class="{ 'text-teal': item.attendance_type === 'recovered' }"
+                      >
+                        {{ item.notes }}
+                      </span>
+                      <span v-else class="text-disabled">Normal</span>
+                    </template>
                   </v-data-table>
+                </div>
+
+                <!-- Thêm legend giải thích -->
+                <div class="table-legend">
+                  <v-alert type="info" variant="tonal" density="compact" class="mt-4">
+                    <strong>Legend:</strong>
+                    <ul class="legend-list">
+                      <li><strong>*</strong> = Standard times for recovered attendance</li>
+                      <li><v-chip color="teal" size="x-small" label>Recovered</v-chip> = Attendance restored by admin approval</li>
+                      <li><v-chip color="red" size="x-small" label>Incomplete</v-chip> = Missing check-in or check-out</li>
+                      <li><v-chip color="purple" size="x-small" label>Half Day</v-chip> = Arrived during lunch hours</li>
+                    </ul>
+                  </v-alert>
                 </div>
               </div>
             </div>
@@ -520,6 +547,7 @@ import '@/assets/css/Employees.css';
 
 const authStore = useAuthStore();
 const router = useRouter();
+const companySettings = ref(null);
 
 // Current tab state
 const currentTab = ref('summary');
@@ -560,14 +588,13 @@ const historyFilters = reactive({
 // Updated headers for daily attendance details
 const dailyAttendanceHeaders = [
   { title: 'Date', key: 'date', sortable: true, width: '120px' },
-  { title: 'Status', key: 'status', sortable: true, width: '100px' },
-  { title: 'Type', key: 'attendance_type', sortable: true, width: '100px' },
   { title: 'Check-in', key: 'checkin_time', sortable: false, width: '100px' },
   { title: 'Check-out', key: 'checkout_time', sortable: false, width: '100px' },
   { title: 'Work Hours', key: 'work_hours', sortable: true, width: '100px' },
-  { title: 'Late', key: 'late_minutes', sortable: true, width: '80px' },
-  { title: 'Early', key: 'early_minutes', sortable: true, width: '80px' },
-  { title: 'Overtime', key: 'overtime_hours', sortable: true, width: '100px' },
+  { title: 'Overtime', key: 'overtime_hours', sortable: true, width: '90px' },
+  { title: 'Status', key: 'status', sortable: true, width: '100px' },
+  // { title: 'Type', key: 'attendance_type', sortable: true, width: '110px' },
+  { title: 'Notes', key: 'notes', sortable: false, width: '150px' },
 ];
 
 // --- Attendance Recovery Request State ---
@@ -622,6 +649,7 @@ const getAttendanceTypeColor = (type) => {
     case 'normal': return 'blue';
     case 'late': return 'orange';
     case 'half_day': return 'purple';
+    case 'incomplete': return 'red';
     case 'recovered': return 'teal';
     default: return 'grey';
   }
@@ -631,6 +659,7 @@ const getStatusColor = (status) => {
   switch (status) {
     case 'present': return 'green';
     case 'absent': return 'red';
+    case 'present_incomplete': return 'orange';
     default: return 'grey';
   }
 };
@@ -645,6 +674,38 @@ const getRecoveryStatusColor = (status) => {
 };
 
 // --- Utility Methods ---
+
+const formatStatus = (status) => {
+  switch (status) {
+    case 'present': return 'Present';
+    case 'absent': return 'Absent';
+    case 'present_incomplete': return 'Present (Incomplete)';
+    default: return status;
+  }
+};
+
+const formatAttendanceType = (type) => {
+  switch (type) {
+    case 'normal': return 'Normal';
+    case 'late': return 'Late';
+    case 'half_day': return 'Half Day';
+    case 'recovered': return 'Recovered';
+    case 'incomplete': return 'Incomplete';
+    default: return type;
+  }
+};
+
+// New simplified date format function
+const formatSimpleDate = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-GB', { 
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  });
+};
+
 const showNotification = (message, color = 'success') => {
   snackbarMessage.value = message;
   snackbarColor.value = color;
@@ -670,17 +731,6 @@ const formatDate = (isoString) => {
   return date.toLocaleDateString('en-GB');
 };
 
-const formatDisplayDate = (dateString) => {
-  if (!dateString) return '';
-  const date = new Date(dateString);
-  return date.toLocaleDateString('en-GB', { 
-    weekday: 'short',
-    year: 'numeric', 
-    month: '2-digit', 
-    day: '2-digit'
-  });
-};
-
 // --- Main Methods ---
 const fetchAttendanceHistory = async () => {
   historyLoading.value = true;
@@ -699,8 +749,19 @@ const fetchAttendanceHistory = async () => {
     // Store the full report
     attendanceReport.value = response;
     
-    // Extract daily records for the table
-    dailyAttendanceRecords.value = response.report?.daily_records || [];
+    // THÊM DÒNG NÀY - lưu company settings từ backend
+    if (response.report?.company_settings) {
+      companySettings.value = response.report.company_settings;
+    }
+    
+    // Extract daily records và thêm notes cho từng ngày
+    const dailyRecords = response.report?.daily_records || [];
+    
+    // Thêm logic tạo notes cho mỗi ngày
+    dailyAttendanceRecords.value = dailyRecords.map(record => ({
+      ...record,
+      notes: generateDayNotes(record)
+    }));
     
     showNotification(`Loaded attendance report for ${dailyAttendanceRecords.value.length} days`);
   } catch (error) {
@@ -711,6 +772,53 @@ const fetchAttendanceHistory = async () => {
   } finally {
     historyLoading.value = false;
   }
+};
+
+const getRecoveredTime = (type) => {
+  if (!companySettings.value) {
+    return type === 'checkin' ? '08:00:00' : '17:00:00'; // fallback
+  }
+  return type === 'checkin' ? companySettings.value.start_work : companySettings.value.end_work;
+};
+
+const generateDayNotes = (record) => {
+  const notes = [];
+  
+  // Kiểm tra status
+  if (record.status === 'absent') {
+    return ' ';
+  }
+  
+  // Kiểm tra attendance_type
+  if (record.attendance_type === 'recovered') {
+    notes.push('Recovered');
+  } else if (record.attendance_type === 'incomplete') {
+    notes.push('Incomplete');
+  } else if (record.attendance_type === 'half_day') {
+    notes.push('Half Day');
+  }
+  
+  // Kiểm tra late
+  if (record.late_minutes > 15) { // Assuming 15 min threshold
+    notes.push('Late Arrival');
+  }
+  
+  // Kiểm tra early departure
+  if (record.early_minutes > 15) {
+    notes.push('Early Leave');
+  }
+  
+  // Kiểm tra forgot checkout
+  if (record.checkin_time && !record.checkout_time && record.attendance_type !== 'recovered') {
+    notes.push('Forgot Checkout');
+  }
+  
+  // Kiểm tra overtime
+  if (record.overtime_hours > 0) {
+    notes.push('Overtime');
+  }
+  
+  return notes.length > 0 ? notes.join(', ') : 'Normal';
 };
 
 const fetchMyRecoveryRequests = async () => {
@@ -828,7 +936,7 @@ onMounted(() => {
     historyFilters.startDate = firstDay.toISOString().split('T')[0];
     historyFilters.endDate = lastDay.toISOString().split('T')[0];
   }
-  
+
   fetchAttendanceHistory();
   fetchMyRecoveryRequests();
 });

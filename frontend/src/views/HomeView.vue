@@ -43,6 +43,15 @@
           >
             <v-icon :icon="tab.icon" size="20" class="tab-icon"></v-icon>
             <span class="tab-label">{{ tab.label }}</span>
+            <!-- Badge for pending requests -->
+            <v-badge 
+              v-if="tab.value === 'audit-logs' && pendingRequestsCount > 0"
+              :content="pendingRequestsCount"
+              color="error"
+              class="tab-badge"
+              inline
+            >
+            </v-badge>
           </button>
         </div>
 
@@ -58,7 +67,7 @@
             </div>
 
             <div v-else-if="currentTab === 'audit-logs'" class="content-panel">
-              <AttendanceRecoveryRequestTab />
+              <AttendanceRecoveryRequestTab @pending-count-updated="updatePendingCount" />
             </div>
 
             <div v-else-if="currentTab === 'settings'" class="content-panel">
@@ -93,7 +102,7 @@ export default {
     const currentTab = ref('employee-management');
     const router = useRouter();
     const authStore = useAuthStore();
-    
+    const pendingRequestsCount = ref(0);
 
     const tabs = [
       {
@@ -108,7 +117,7 @@ export default {
       },
       {
         value: 'audit-logs',
-        label: 'Attendance Recovery Reuqest',
+        label: 'Attendance Recovery Request',
         icon: 'mdi-format-list-bulleted-square'
       },
       {
@@ -118,22 +127,28 @@ export default {
       }
     ];
 
-  const handleLogout = async () => {
-    try {
-      await authStore.logout();
-      router.push('/login');
-      console.log('Admin logged out successfully.');
-    } catch (error) {
-      console.error('Logout error:', error);
-      // Vẫn redirect về login dù có lỗi
-      router.push('/login');
-    }
-  };
+    const updatePendingCount = (count) => {
+      pendingRequestsCount.value = count;
+    };
+
+    const handleLogout = async () => {
+      try {
+        await authStore.logout();
+        router.push('/login');
+        console.log('Admin logged out successfully.');
+      } catch (error) {
+        console.error('Logout error:', error);
+        // Vẫn redirect về login dù có lỗi
+        router.push('/login');
+      }
+    };
 
     return {
       currentTab,
       tabs,
       handleLogout,
+      pendingRequestsCount,
+      updatePendingCount
     };
   },
 };
@@ -283,6 +298,7 @@ export default {
   color: #64748b;
   min-width: 180px;
   justify-content: center;
+  position: relative;
 }
 
 .nav-tab:hover {
@@ -303,6 +319,36 @@ export default {
 .tab-label {
   font-size: 14px;
   white-space: nowrap;
+}
+
+/* Tab Badge Styling */
+.tab-badge {
+  position: absolute !important;
+  top: 8px !important;
+  right: 8px !important;
+  z-index: 10;
+}
+
+.tab-badge :deep(.v-badge__badge) {
+  font-size: 11px !important;
+  min-width: 18px !important;
+  height: 18px !important;
+  animation: pulse-badge 2s infinite;
+}
+
+@keyframes pulse-badge {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(244, 67, 54, 0.7);
+  }
+  70% {
+    transform: scale(1.1);
+    box-shadow: 0 0 0 6px rgba(244, 67, 54, 0);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(244, 67, 54, 0);
+  }
 }
 
 /* Content Area */

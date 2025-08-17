@@ -12,25 +12,45 @@
     </div>
 
     <v-card class="elevation-4 pa-4 rounded-lg">
-      <v-text-field
-        v-model="searchQuery"
-        label="Search by ID, Name, Email, or Department"
-        prepend-inner-icon="mdi-magnify"
-        variant="outlined"
-        clearable
-        hide-details
-        class="mb-4"
-        @input="debouncedSearch"
-        @click:clear="onSearchClear"
-      ></v-text-field>
+      <div class="d-flex align-center ga-4 mb-4">
+        <v-text-field
+          v-model="searchQuery"
+          label="Search by ID, Name, Email, or Department"
+          prepend-inner-icon="mdi-magnify"
+          variant="outlined"
+          density="comfortable"
+          clearable
+          hide-details
+          class="flex-grow-1 search-field"
+          @input="debouncedSearch"
+          @click:clear="onSearchClear"
+        ></v-text-field>
+
+        <v-select
+          v-model="statusFilter"
+          label="Filter by Status"
+          variant="outlined"
+          density="comfortable"
+          hide-details
+          clearable
+          :items="statusFilterOptions"
+          item-title="text"
+          item-value="value"
+          style="min-width: 200px;"
+          class="status-filter"
+        >
+          <template v-slot:prepend-inner>
+            <v-icon color="primary">mdi-filter-variant</v-icon>
+          </template>
+        </v-select>
+      </div>
 
       <v-data-table-server
         :headers="headers"
         :items="employees"
         :items-length="totalEmployees"
         :loading="loading"
-        :options.sync="options"
-        @update:options="updateOptions"
+        v-model:options="options"
         class="elevation-0"
         item-value="employee_id"
       >
@@ -101,6 +121,7 @@
       </v-data-table-server>
     </v-card>
 
+    <!-- Rest of the dialogs remain the same... -->
     <v-dialog v-model="employeeDialog" max-width="800px">
       <v-card rounded="lg">
         <v-card-title class="headline text-h5 primary-title-dialog py-4">
@@ -206,7 +227,7 @@
     <FaceCapture
       v-if="showFaceCaptureDialog && employeeIdForFaceCapture"
       :userId="employeeIdForFaceCapture"
-      :isNewAddition="isNewEmployeeBeingCaptured" 
+      :isNewAddition="isNewEmployeeBeingCaptured"
       @completed="onFaceCaptureCompleted"
       @cancelled="onFaceCaptureCancelled"
     />
@@ -254,7 +275,7 @@
 
 <script>
 import '@/assets/css/EmployeeManagementTab.css';
-import { defineComponent, ref, onMounted, watch } from 'vue'; // Thêm watch vào import
+import { defineComponent, ref, onMounted, watch, computed } from 'vue';
 import {
   getEmployees, deleteEmployee, restoreEmployee, addEmployee, updateEmployee
 } from '../services/api';
@@ -269,7 +290,14 @@ export default defineComponent({
     const totalEmployees = ref(0);
     const loading = ref(true);
     const searchQuery = ref('');
+    const statusFilter = ref(null);
     const options = ref({ page: 1, itemsPerPage: 10, sortBy: [], groupBy: [] });
+
+    const statusFilterOptions = ref([
+      { text: 'All Employees', value: null },
+      { text: 'Active Only', value: 'true' },
+      { text: 'Deleted Only', value: 'false' }
+    ]);
 
     const employeeDialog = ref(false);
     const isEditing = ref(false);
@@ -292,35 +320,37 @@ export default defineComponent({
       { title: 'Actions', key: 'actions', sortable: false, align: 'center' },
     ]);
 
-    // Face capture related
     const employeeIdForFaceCapture = ref(null);
     const isNewEmployeeBeingCaptured = ref(false);
     const showFaceCaptureDialog = ref(false);
     const canEditIdInDialog = ref(false);
 
-    // Debounce search input
     let searchTimeout = null;
 
-    // Function to fetch employees
+
+
     const fetchEmployees = async () => {
       loading.value = true;
       try {
         const { page, itemsPerPage, sortBy } = options.value;
         const sortField = sortBy[0]?.key || 'created_at';
         const sortOrder = sortBy[0]?.order === 'desc' ? 'desc' : 'desc';
-        
-        const params = { 
-          page, 
-          limit: itemsPerPage, 
-          sort_by: sortField, 
-          sort_order: sortOrder 
+
+        const params = {
+          page,
+          limit: itemsPerPage,
+          sort_by: sortField,
+          sort_order: sortOrder
         };
-        
-        // Thêm search parameter nếu có
+
         if (searchQuery.value && searchQuery.value.trim()) {
           params.search = searchQuery.value.trim();
         }
-        
+
+        if (statusFilter.value !== null) {
+          params.status = statusFilter.value;
+        }
+
         const response = await getEmployees(params);
         employees.value = response.employees || [];
         totalEmployees.value = response.total || 0;
@@ -334,39 +364,32 @@ export default defineComponent({
       }
     };
 
-    // Debounced search function
     const debouncedSearch = () => {
       clearTimeout(searchTimeout);
       searchTimeout = setTimeout(() => {
-        // Reset về trang đầu khi search
         options.value.page = 1;
         fetchEmployees();
-      }, 300); // Giảm xuống 300ms cho responsive hơn
+      }, 300);
     };
 
-    // Handle search clear
     const onSearchClear = () => {
       searchQuery.value = '';
       options.value.page = 1;
       fetchEmployees();
     };
 
-    // Watch searchQuery for changes
-    watch(searchQuery, (newValue) => {
-      if (!newValue || newValue.trim() === '') {
-        // Nếu search query rỗng, reset về trang đầu và fetch lại
+    watch([searchQuery, statusFilter], ([newSearch, newStatus], [oldSearch, oldStatus]) => {
+      if (newSearch !== oldSearch || newStatus !== oldStatus) {
         options.value.page = 1;
         fetchEmployees();
       }
     });
 
     const updateOptions = (newOptions) => {
-      if (JSON.stringify(options.value) !== JSON.stringify(newOptions)) {
-        options.value = { ...newOptions };
-        fetchEmployees();
-      }
+      options.value = newOptions;
+      fetchEmployees();
     };
-
+    
     const openAddEmployeeDialog = () => {
       isEditing.value = false;
       employeeIdForFaceCapture.value = null;
@@ -458,16 +481,16 @@ export default defineComponent({
       isNewEmployeeBeingCaptured.value = false;
     };
 
-    const confirmSoftDelete = (e) => { 
-      selectedEmployee.value = e; 
-      actionType.value = 'delete'; 
-      confirmDialog.value = true; 
+    const confirmSoftDelete = (e) => {
+      selectedEmployee.value = e;
+      actionType.value = 'delete';
+      confirmDialog.value = true;
     };
-    
-    const confirmRestoreEmployee = (e) => { 
-      selectedEmployee.value = e; 
-      actionType.value = 'restore'; 
-      confirmDialog.value = true; 
+
+    const confirmRestoreEmployee = (e) => {
+      selectedEmployee.value = e;
+      actionType.value = 'restore';
+      confirmDialog.value = true;
     };
 
     const executeConfirmedAction = async () => {
@@ -490,12 +513,12 @@ export default defineComponent({
     onMounted(fetchEmployees);
 
     return {
-      employees, totalEmployees, loading, searchQuery, options,
+      employees, totalEmployees, loading, searchQuery, statusFilter, statusFilterOptions, options,
       employeeDialog, isEditing, editedEmployee, headers,
       openAddEmployeeDialog, openEditEmployeeDialog, closeEmployeeDialog, saveEmployee,
       confirmDialog, selectedEmployee, actionType,
       confirmSoftDelete, confirmRestoreEmployee, executeConfirmedAction,
-      snackbar, showSnackbar, updateOptions, debouncedSearch, onSearchClear,
+      snackbar, showSnackbar, debouncedSearch, onSearchClear, updateOptions,
       employeeIdForFaceCapture, showFaceCaptureDialog, onFaceCaptureCompleted, onFaceCaptureCancelled,
       isNewEmployeeBeingCaptured, openFaceCaptureForEdit,
       canEditIdInDialog,
@@ -504,3 +527,33 @@ export default defineComponent({
   }
 });
 </script>
+
+<style scoped>
+.search-field :deep(.v-field__outline) {
+  border-color: rgba(var(--v-theme-primary), 0.2);
+  transition: all 0.3s ease;
+}
+
+.search-field :deep(.v-field--focused .v-field__outline) {
+  border-color: rgb(var(--v-theme-primary));
+  box-shadow: 0 0 0 2px rgba(var(--v-theme-primary), 0.1);
+}
+
+.status-filter :deep(.v-field__outline) {
+  border-color: rgba(var(--v-theme-primary), 0.2);
+  transition: all 0.3s ease;
+}
+
+.status-filter :deep(.v-field--focused .v-field__outline) {
+  border-color: rgb(var(--v-theme-primary));
+  box-shadow: 0 0 0 2px rgba(var(--v-theme-primary), 0.1);
+}
+
+.search-field :deep(.v-field--variant-outlined .v-field__field) {
+  padding-inline: 16px;
+}
+
+.status-filter :deep(.v-field--variant-outlined .v-field__field) {
+  padding-inline: 16px;
+}
+</style>

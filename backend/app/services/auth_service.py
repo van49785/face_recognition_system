@@ -1,7 +1,8 @@
 from datetime import datetime, timedelta
 from typing import Tuple, Optional, Union
 import pytz
-import uuid 
+import jwt
+import uuid
 
 from app.db import db
 from app.models.admin import Admin
@@ -10,6 +11,7 @@ from app.models.audit_log import AuditLog
 from app.models.session import Session
 from app.utils.security import generate_jwt_token
 from app.config import Config 
+from app.services.email_service import send_password_reset_email
 
 VN_TIMEZONE = pytz.timezone("Asia/Ho_Chi_Minh")
 
@@ -95,6 +97,10 @@ def login_employee(employee_id_or_email: str, password: str) -> Tuple[Optional[s
         (Employee.employee_id == username_input.upper()) |
         (Employee.email == username_input.lower())
     ).first()
+
+
+    if not employee.status:
+        return None, "Invalid Account", None
 
     if not employee:
         return None, "Invalid username or password.", None
@@ -204,3 +210,123 @@ def verify_token(jwt_payload: dict) -> Optional[Union[Admin, Employee]]:
             return user_obj
         
     return None
+
+
+def forgot_password(email: str, user_type: str) -> Tuple[bool, Optional[str]]:
+    """
+    Gửi email reset password cho admin hoặc employee
+    """
+    try:
+        # Tìm user theo email
+        user_obj = None
+        if user_type == 'admin':
+            user_obj = Admin.query.filter_by(email=email.lower()).first()
+        elif user_type == 'employee':
+            user_obj = Employee.query.filter_by(email=email.lower()).first()
+        else:
+            return False, "Invalid user type"
+            
+        # Security: Không tiết lộ email có tồn tại hay không
+        if not user_obj:
+            return True, None
+            
+        # FIXED: Sử dụng UTC time nhất quán
+        now_utc = datetime.now(pytz.timezone("Asia/Ho_Chi_Minh"))
+        
+        # Tạo JWT reset token (expires trong 30 phút)
+        reset_payload = {
+            'user_id': user_obj.id,
+            'user_type': user_type,
+            'purpose': 'password_reset',
+            'exp': now_utc + timedelta(minutes=30),
+            'iat': now_utc,
+            'jti': str(uuid.uuid4())  # Thêm JTI để nhất quán
+        }
+        
+        reset_token = jwt.encode(reset_payload, Config.JWT_SECRET_KEY, algorithm='HS256')
+        
+        user_name = user_obj.username if user_type == 'admin' else user_obj.full_name
+        send_password_reset_email(email, reset_token, user_type, user_name)
+        
+        print(f"Password reset email sent to {email} (user_type: {user_type})")
+        return True, None
+        
+    except Exception as e:
+        return False, "Unable to send reset email. Please try again later."
+
+
+def reset_password_with_token(token: str, new_password: str) -> Tuple[bool, Optional[str]]:
+    """
+    Reset password bằng JWT token từ email
+    """
+    try:
+        
+        # FIXED: Sử dụng function decode từ security.py
+        from app.utils.security import decode_jwt_token
+        
+        payload = decode_jwt_token(token)
+        
+        if not payload:
+            # Fallback: Thử decode trực tiếp để debug
+            try:
+                payload = jwt.decode(token, Config.JWT_SECRET_KEY, algorithms=['HS256'])
+            except jwt.ExpiredSignatureError:
+                return False, "Reset link has expired. Please request a new one."
+            except jwt.InvalidTokenError as e:
+                return False, "Invalid reset link. Please request a new one."
+            
+        # Kiểm tra purpose
+        if payload.get('purpose') != 'password_reset':
+            return False, "Invalid reset token."
+            
+        # Validate password
+        if not new_password or len(new_password) < Config.MIN_PASSWORD_LENGTH:
+            return False, f"Password must be at least {Config.MIN_PASSWORD_LENGTH} characters long."
+            
+        # Lấy user info từ token
+        user_id = payload.get('user_id')
+        user_type = payload.get('user_type')
+        
+        
+        if not user_id or not user_type:
+            return False, "Invalid reset token."
+            
+        # Tìm user và update password
+        user_obj = None
+        if user_type == 'admin':
+            user_obj = Admin.query.get(user_id)
+        elif user_type == 'employee':
+            user_obj = Employee.query.get(user_id)
+            
+        if not user_obj:
+            return False, "User not found."
+            
+        
+        # Update password
+        user_obj.set_password(new_password)
+        
+        # Nếu là employee, reset flag must_change_password
+        if user_type == 'employee':
+            user_obj.must_change_password = False
+            
+        # Reset failed attempts và unlock account (nếu bị khóa)
+        user_obj.failed_attempts = 0
+        user_obj.locked_until = None
+        user_obj.updated_at = datetime.now(VN_TIMEZONE).replace(tzinfo=None)
+        
+        # Vô hiệu hóa tất cả session hiện tại của user này
+        if user_type == 'admin':
+            Session.query.filter_by(admin_id=user_id, is_valid=True).update({'is_valid': False})
+        else:
+            Session.query.filter_by(employee_id=user_id, is_valid=True).update({'is_valid': False})
+            
+        db.session.commit()
+        
+        print(f"Password reset successfully for {user_type} ID: {user_id}")
+        return True, None
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        db.session.rollback()
+        return False, "Unable to reset password. Please try again."

@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from datetime import datetime, time
 from typing import Optional, List, Dict, Any, Tuple       
 from app.models.attendance_recovery import AttendanceRecoveryRequest
+from app.models.settings import Settings
 
 class AttendanceRecoveryService:
     @staticmethod
@@ -118,6 +119,13 @@ class AttendanceRecoveryService:
             db.session.commit()
 
             if status == 'approved':
+                # Lấy các cài đặt giờ làm việc từ database
+                settings = Settings.get_current_settings()
+                
+                # Sử dụng giờ làm việc từ settings thay vì hard-code
+                start_work_time = settings.start_work
+                end_work_time = settings.end_work
+                
                 # Logic để "phục hồi" chấm công trong bảng Attendance
                 attendance_records_for_day = Attendance.get_records_by_employee_and_date(
                     employee_id=request.employee_id,
@@ -126,9 +134,8 @@ class AttendanceRecoveryService:
 
                 if not attendance_records_for_day:
                     # Nếu không có bản ghi nào, tạo một bản ghi 'check-in' với type 'recovered'
-                    # FIX: Sử dụng time(8,0,0) thay vì datetime(1,1,1,8,0,0).time()
-                    checkin_time = datetime.combine(request.request_date, time(8, 0, 0))
-                    checkout_time = datetime.combine(request.request_date, time(17, 0, 0))
+                    checkin_time = datetime.combine(request.request_date, start_work_time)
+                    checkout_time = datetime.combine(request.request_date, end_work_time)
                     
                     # Tạo check-in record
                     checkin_record = Attendance.create_attendance(
@@ -154,7 +161,6 @@ class AttendanceRecoveryService:
                 else:
                     # Cập nhật tất cả các bản ghi của ngày đó thành 'recovered'
                     for record in attendance_records_for_day:
-                        # Cập nhật attendance_type thành 'recovered' cho tất cả records của ngày đó
                         record.attendance_type = 'recovered'
                         
                 db.session.commit()
