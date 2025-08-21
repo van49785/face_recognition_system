@@ -36,9 +36,9 @@ def create_app(config_class=Config):
 
     # Cấu hình CORS chi tiết hơn
     CORS(app, resources={
-        r"/api/*": {"origins": ["http://localhost:3000", "http://localhost:5173"], "methods": ["GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"]},
-        r"/uploads/*": {"origins": ["http://localhost:3000", "http://localhost:5173"], "methods": ["GET", "HEAD", "OPTIONS"]},
-        r"/exports/*": {"origins": ["http://localhost:3000", "http://localhost:5173"], "methods": ["GET", "HEAD", "OPTIONS"]}
+        r"/api/*": {"origins": "*", "methods": ["GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"]},
+        r"/uploads/*": {"origins": "*", "methods": ["GET", "HEAD", "OPTIONS"]},
+        r"/exports/*": {"origins": "*", "methods": ["GET", "HEAD", "OPTIONS"]}
     })
 
     # Đăng ký blueprints
