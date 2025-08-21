@@ -7,14 +7,16 @@ This project is a modern attendance management system that integrates face recog
 1. [Key Features](#key-features)
 2. [Technologies Used](#technologies-used)
 3. [System Requirements](#system-requirements)
-4. [Installation and Setup](#installation-and-setup)
+4. [Quick Start with Docker (Recommended)](#quick-start-with-docker-recommended)
+5. [Manual Installation and Setup](#manual-installation-and-setup)
    - [Backend](#backend)
    - [Frontend](#frontend)
-5. [Usage](#usage)
+6. [Usage](#usage)
    - [Login](#login)
    - [Public Attendance (Face Recognition)](#public-attendance-face-recognition)
    - [Admin Portal](#admin-portal)
    - [Employee Portal](#employee-portal)
+7. [Default Admin Account](#default-admin-account)
 
 ## Key Features
 
@@ -55,7 +57,7 @@ This project is a modern attendance management system that integrates face recog
 ## Technologies Used
 
 ### Backend
-- **Python 3.8+**
+- **Python 3.12+**
 - **Flask**: A microframework for web development
 - **SQLAlchemy**: An Object-Relational Mapper (ORM) for database interaction
 - **OpenCV**: A library for image processing
@@ -73,17 +75,89 @@ This project is a modern attendance management system that integrates face recog
 ### Database
 - **SQLite**
 
+### Deployment
+- **Docker**: Containerized deployment for easy setup
+- **Docker Compose**: Multi-container orchestration
+- **Nginx**: Reverse proxy and static file serving
+
 ## System Requirements
 
-To run this project, you need to have the following installed:
+### For Docker Deployment (Recommended)
+- **Docker**: Version 20.10+
+- **Docker Compose**: Version 2.0+
+- **Minimum RAM**: 4GB
+- **Minimum Disk Space**: 10GB
 
+### For Manual Setup
 - Python 3.8+
 - Node.js 16+ and npm (or Yarn)
 - pip (Python package installer)
 - OpenCV (Often installed as a dependency with face recognition libraries)
 - C++ Build Tools (For Windows, required for dlib and related libraries. On Linux/macOS, basic development tools are usually sufficient)
 
-## Installation and Setup
+## Quick Start with Docker (Recommended)
+
+### Option 1: Using Pre-built Images from Docker Hub
+
+1. **Clone the repository:**
+   ```bash
+   git clone <YOUR_REPO_URL>
+   cd <your_project_folder>
+   ```
+
+2. **Run the application:**
+   ```bash
+   docker-compose up -d
+   ```
+
+**Alternative - Download only docker-compose.yml:**
+```bash
+mkdir face-recognition-system
+cd face-recognition-system
+curl -O https://raw.githubusercontent.com/van49785/face_recognition_system/main/docker-compose.yml
+docker-compose up -d
+```
+
+3. **Access the application:**
+   - Frontend: http://localhost
+   - Backend API: http://localhost/api
+
+4. **Stop the application:**
+   ```bash
+   docker-compose down
+   ```
+
+### Option 2: Build from Source
+
+1. **Clone the repository:**
+   ```bash
+   git clone <YOUR_REPO_URL>
+   cd <your_project_folder>
+   ```
+
+2. **Build and run with Docker Compose:**
+   ```bash
+   docker-compose up --build -d
+   ```
+
+3. **Access the application:**
+   - Frontend: http://localhost
+   - Backend API: http://localhost/api
+
+### Docker Images Available
+
+The following pre-built images are available on Docker Hub:
+
+- **Backend**: `your-username/face-recognition-backend:latest`
+- **Frontend**: `your-username/face-recognition-frontend:latest`
+
+### Data Persistence
+
+The Docker setup includes volume mounts for data persistence:
+- **Database**: `./backend/instance` - SQLite database files
+- **Face Data**: `./backend/data` - Employee face recognition data
+
+## Manual Installation and Setup
 
 ### Backend
 
@@ -158,11 +232,13 @@ To run this project, you need to have the following installed:
 
 ## Usage
 
-Once both the backend and frontend servers are running, you can access the application via your web browser.
+Once the application is running (either via Docker or manual setup), you can access it via your web browser.
 
 ### Login
 
-Access `http://localhost:5173/login`.
+Access the login page:
+- **Docker**: http://localhost/login
+- **Manual Setup**: http://localhost:5173/login
 
 You will see two tabs: "Admin Login" and "Employee Login".
 
@@ -171,7 +247,9 @@ You will see two tabs: "Admin Login" and "Employee Login".
 
 ### Public Attendance (Face Recognition)
 
-Access `http://localhost:5173/attendance`.
+Access the attendance interface:
+- **Docker**: http://localhost/attendance
+- **Manual Setup**: http://localhost:5173/attendance
 
 This is the main attendance interface where employees can use face recognition to check-in/check-out.
 
@@ -193,4 +271,42 @@ After logging in with an Employee account, you will be redirected to your person
 - **Submit Attendance Recovery Requests**: Submit requests to adjust attendance records for forgotten check-ins/outs or errors
 - **Change Password**: Update your account password
 
+## Default Admin Account
+
+The system comes with a pre-configured admin account:
+
+- **Username**: `admin1`
+- **Password**: `123456`
+- **Email**: `van49785@gmail.com`
+- **Role**: `admin`
+
+> **Security Note**: Please change the default admin password immediately after first login in a production environment.
+
+## Troubleshooting
+
+### Docker Issues
+
+1. **Port conflicts**: If port 80 is already in use, modify the docker-compose.yml file to use a different port:
+   ```yaml
+   frontend:
+     ports:
+       - "8080:80"  # Change to port 8080
+   ```
+
+2. **Permission issues**: On Linux/macOS, you might need to use `sudo` with Docker commands.
+
+3. **Face recognition not working**: Ensure your camera is accessible and not being used by other applications.
+
+### Manual Setup Issues
+
+1. **dlib installation fails**: This is common on Windows. Try installing pre-compiled wheels or use conda instead of pip.
+
+2. **Camera access denied**: Check browser permissions for camera access.
+
+## Contributing
+
 If you wish to contribute to this project, please fork the repository, create a new branch for your feature/bug fix, and submit a Pull Request.
+
+## Support
+
+For issues and questions, please create an issue in the GitHub repository or contact van49785@gmail.com.
