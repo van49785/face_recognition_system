@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  backend:
+    image: thaovan01320/face-recognition-backend:latest
+    container_name: face-recognition-backend
+    ports:
+      - "5000:5000"  
+    volumes:
+      - ./backend/instance:/app/instance  
+      - ./backend/data:/app/data          
+    environment:
+      - FLASK_ENV=production          
+      - FLASK_DEBUG=False             
+      - FLASK_RUN_HOST=0.0.0.0       
+      - FLASK_RUN_PORT=5000          
+      - ENVIRONMENT=production        
+      - DATABASE_URL=sqlite:////app/instance/attendance.db  
+    networks:
+      - face-recognition-network
+
+  frontend:
+    image: thaovan01320/face-recognition-frontend:latest
+    container_name: face-recognition-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend  
+    networks:
+      - face-recognition-network
+
+networks:
+  face-recognition-network:
+    driver: bridge
