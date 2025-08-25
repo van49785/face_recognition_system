@@ -148,8 +148,8 @@ docker-compose up -d
 
 The following pre-built images are available on Docker Hub:
 
-- **Backend**: `your-username/face-recognition-backend:latest`
-- **Frontend**: `your-username/face-recognition-frontend:latest`
+- **Backend**: `thaovan01320/face-recognition-backend:latest`
+- **Frontend**: `thaovan01320/face-recognition-frontend:latest`
 
 ### Data Persistence
 
